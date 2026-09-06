@@ -6,10 +6,12 @@ import type {
   LyricsAnalysisRequest,
   LyricsAnalysisResult,
   PitchSeries,
+  RubyPair,
   TokenAnalysisItem,
   TokenItem,
 } from '../types'
 import { hasWord } from './wordApi'
+import { toRomaji } from '../utils/romaji'
 
 /**
  * 歌词声调 · 情感分析的 Mock 实现
@@ -58,6 +60,12 @@ const LEXICON: Record<string, { reading: string; pos: string; posDetail: string;
   と: { reading: 'と', pos: '助词', posDetail: '格助词', meaning: '和…/与…' },
   て: { reading: 'て', pos: '助词', posDetail: '接续助词', meaning: '（接续）' },
   る: { reading: 'る', pos: '助动词', posDetail: '辞书形词尾', meaning: '（终止形）' },
+  合う: { reading: 'あう', pos: '动词', posDetail: '五段', meaning: '相合、彼此' },
+  追い: { reading: 'おい', pos: '动词', posDetail: '五段·连用形', meaning: '追赶' },
+  高く: { reading: 'たかく', pos: '形容词', posDetail: 'イ形容词·连用形', meaning: '高高地' },
+  この: { reading: 'この', pos: '连体词', posDetail: '连体词', meaning: '这个' },
+  まで: { reading: 'まで', pos: '助词', posDetail: '副助词', meaning: '到…为止' },
+  もっと: { reading: 'もっと', pos: '副词', posDetail: '副词', meaning: '更、更加' },
 }
 
 const EMOTION_KEYWORDS: Record<EmotionKey, string[]> = {
@@ -108,6 +116,50 @@ function makeRng(seed: string): () => number {
   }
 }
 
+/** 单拍助词（独立成词，前后留空） */
+const PARTICLE_SET = new Set(['の', 'で', 'と', 'を', 'が', 'に', 'へ', 'も', 'は'])
+
+/** 把一个不含空白的“段”转换为按词分隔的罗马音 */
+function segmentToRomaji(segment: string): string {
+  const keys = Object.keys(LEXICON).sort((a, b) => b.length - a.length)
+  const words: string[] = []
+  let current = ''
+  const flush = () => {
+    if (current) {
+      words.push(toRomaji(current))
+      current = ''
+    }
+  }
+  let i = 0
+  while (i < segment.length) {
+    let matched = false
+    for (const key of keys) {
+      if (segment.startsWith(key, i)) {
+        const info = LEXICON[key]
+        const isContent = /[\u4e00-\u9fff]/.test(key) || info.reading.length > 1
+        if (PARTICLE_SET.has(key)) {
+          flush()
+          words.push(toRomaji(info.reading))
+        } else if (isContent) {
+          if (current) flush()
+          current = info.reading
+        } else {
+          current += info.reading
+        }
+        i += key.length
+        matched = true
+        break
+      }
+    }
+    if (!matched) {
+      current += segment[i]
+      i += 1
+    }
+  }
+  flush()
+  return words.join(' ')
+}
+
 /** 贪心最长匹配分词（Mock） */
 function tokenize(lyric: string): TokenItem[] {
   const text = cleanLyric(lyric)
@@ -135,7 +187,7 @@ function tokenize(lyric: string): TokenItem[] {
       const ch = text[i]
       result.push({
         surface: ch,
-        reading: ch,
+        reading: /[ぁ-ゖァ-ヶ]/.test(ch) ? ch : '',
         pos: '未分词（Mock）',
         posDetail: hasWord(ch) ? '收录于示例词典' : '待 UniDic 解析',
         meaning: '',
@@ -233,5 +285,18 @@ export async function analyzeLyrics(request: LyricsAnalysisRequest): Promise<Lyr
     tokens,
     tokenAnalyses,
     grammar: analyzeGrammar(lyric),
+    rubyPairs: tokens
+      .filter((token) => token.reading !== '')
+      .map((token): RubyPair => ({ surface: token.surface, reading: token.reading })),
+    romaji: lyric
+      .split(/\r?\n/)
+      .map((line) =>
+        line
+          .split(/[\s\u3000]+/)
+          .filter(Boolean)
+          .map((segment) => segmentToRomaji(segment))
+          .join(' '),
+      )
+      .join('\n'),
   }
 }

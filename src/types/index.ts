@@ -152,6 +152,10 @@ export interface LyricsAnalysisResult {
   tokenAnalyses: TokenAnalysisItem[]
   /** 歌词语法解析 */
   grammar: GrammarItem[]
+  /** 歌词振假名（逐词 surface -> reading） */
+  rubyPairs: RubyPair[]
+  /** 整段歌词罗马音（保留词内促音/长音上下文） */
+  romaji: string
 }
 
 /**
@@ -163,4 +167,73 @@ export interface UtaerService {
   lookupWord(word: string): Promise<AccentWord>
   /** 歌词声调 + 情感分析 */
   analyzeLyrics(request: LyricsAnalysisRequest): Promise<LyricsAnalysisResult>
+}
+
+/** 振假名：汉字/词的表记与读音 */
+export interface RubyPair {
+  /** 表记（汉字/词形，如 空） */
+  surface: string
+  /** 读音（假名，如 そら） */
+  reading: string
+}
+
+/** 声调曲线中的单个采样点 */
+export interface AudioAccentPoint {
+  /** 时间（秒） */
+  time: number
+  /** 基频 F0（Hz），浊音段有值、清音/停顿为 0 或 null */
+  f0: number | null
+  /** 所属音拍（mora）序号 */
+  moraIndex?: number
+}
+
+/** 后端 accent_analysis 任务结果（audio_accent.json） */
+export interface AudioAccentData {
+  /** 用户音频的声调曲线 */
+  points: AudioAccentPoint[]
+  /** 标准/正确音调曲线（用于前端对比匹配） */
+  canonical: AudioAccentPoint[]
+  /** mora 边界时间点 */
+  moraBoundaries: number[]
+  /** 歌词振假名 */
+  rubyPairs: RubyPair[]
+}
+
+/** F0 统计 */
+export interface F0Stats {
+  mean: number
+  min: number
+  max: number
+  range: number
+  std: number
+}
+
+/** 后端 feature_analysis 任务结果（audio_feature.json） */
+export interface AudioFeatureData {
+  /** 能量包络（归一化 0-1 序列） */
+  energy: number[]
+  /** F0 统计 */
+  f0Stats: F0Stats
+  /** 频谱图（每个时间帧一个频点数组，可先 mock） */
+  spectrum: number[][]
+  /** 情感分析（可选） */
+  emotion?: {
+    label: string
+    confidence: number
+  }
+}
+
+/** Supabase 分析任务状态 */
+export type AnalysisTaskStatus = 'pending' | 'completed' | 'failed'
+
+/** Supabase 分析任务类型 */
+export type AnalysisTaskType = 'accent_analysis' | 'feature_analysis'
+
+/** Supabase 分析任务记录 */
+export interface AnalysisTask {
+  id: string
+  type: AnalysisTaskType
+  status: AnalysisTaskStatus
+  resultPath?: string
+  error?: string
 }

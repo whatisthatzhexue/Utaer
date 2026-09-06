@@ -4,7 +4,7 @@ import {
   Menu,
   Button,
   Input,
-  Upload,
+  Radio,
   Card,
   Empty,
   Tag,
@@ -17,18 +17,18 @@ import {
   HomeOutlined,
   LineChartOutlined,
   InfoCircleOutlined,
-  UploadOutlined,
   PlayCircleOutlined,
   FileTextOutlined,
   SmileOutlined,
   TagsOutlined,
   BranchesOutlined,
-  AudioOutlined,
   SoundOutlined,
+  AudioOutlined,
 } from '@ant-design/icons'
 import type { MenuProps } from 'antd'
 import { analyzeLyrics } from './api/lyricsApi'
 import type { LyricsAnalysisResult, EmotionKey, PitchSeries } from './types'
+import AudioInput from './components/AudioInput'
 
 type PageKey = 'home' | 'lyrics' | 'about'
 
@@ -171,6 +171,9 @@ const CSS = `
   .ute-out-card .ant-card-head-title { font-weight: 700; color: #274b6d; }
   .ute-out-tip { color: #a8b8c8; font-size: 12.5px; margin-left: 8px; }
   .ute-lyric-text { white-space: pre-wrap; line-height: 2; color: #2c4259; font-size: 15px; }
+  .ute-ruby-text { font-size: 15px; line-height: 2.6; color: #2c4259; }
+  .ute-ruby-text ruby { ruby-align: center; }
+  .ute-ruby-text rt { font-size: 10px; color: #6e8095; }
 
   /* 折线图占位 */
   .ute-chart-wrap { width: 100%; }
@@ -425,7 +428,8 @@ function renderGrammarCard(result: LyricsAnalysisResult) {
 export default function App() {
   const [page, setPage] = useState<PageKey>('home')
   const [lyrics, setLyrics] = useState('')
-  const [audioName, setAudioName] = useState('')
+  const [audioFile, setAudioFile] = useState<File | null>(null)
+  const [lyricView, setLyricView] = useState<'text' | 'ruby' | 'romaji'>('text')
   const [result, setResult] = useState<LyricsAnalysisResult | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
 
@@ -441,7 +445,7 @@ export default function App() {
     }
     setAnalyzing(true)
     try {
-      const res = await analyzeLyrics({ lyric: lyrics, audio: audioName || null })
+      const res = await analyzeLyrics({ lyric: lyrics, audio: audioFile })
       setResult(res)
     } catch {
       setResult(null)
@@ -524,23 +528,11 @@ export default function App() {
                 演唱音频（可选）
               </Typography.Text>
               <div style={{ marginTop: 8 }}>
-                <Upload
-                  accept="audio/*"
-                  maxCount={1}
-                  beforeUpload={() => false}
-                  showUploadList={false}
-                  onChange={(info) => {
-                    const name = info.fileList[0]?.name
-                    setAudioName(name ?? '')
-                    setResult(null)
-                  }}
-                >
-                  <Button icon={<UploadOutlined />}>选择音频文件</Button>
-                </Upload>
-                {audioName ? (
-                  <span className="ute-file-hint">已选择：{audioName}（Mock：暂不处理音频内容）</span>
+                <AudioInput value={audioFile} onChange={setAudioFile} />
+                {audioFile ? (
+                  <span className="ute-file-hint">已选择：{audioFile.name} · Mock 分析仅依据歌词文本生成</span>
                 ) : (
-                  <span className="ute-file-hint">音频可选；Mock 分析仅依据歌词文本生成</span>
+                  <span className="ute-file-hint">可录音或上传音频；Mock 分析仅依据歌词文本生成</span>
                 )}
               </div>
             </div>
@@ -562,9 +554,41 @@ export default function App() {
 
         {result ? (
           <div className="ute-out-grid u-anim-top u-d1">
-            <Card className="ute-card ute-out-card ute-out-full" title="歌词输出">
+            <Card
+              className="ute-card ute-out-card ute-out-full"
+              title={
+                <Flex justify="space-between" align="center" style={{ width: '100%' }}>
+                  <span>歌词输出</span>
+                  <Radio.Group
+                    size="small"
+                    optionType="button"
+                    buttonStyle="solid"
+                    value={lyricView}
+                    onChange={(e) => setLyricView(e.target.value as 'text' | 'ruby' | 'romaji')}
+                    options={[
+                      { label: '原文', value: 'text' },
+                      { label: '振假名', value: 'ruby' },
+                      { label: '罗马音', value: 'romaji' },
+                    ]}
+                  />
+                </Flex>
+              }
+            >
               {result.lyric ? (
-                <div className="ute-lyric-text">{result.lyric}</div>
+                lyricView === 'text' ? (
+                  <div className="ute-lyric-text">{result.lyric}</div>
+                ) : lyricView === 'ruby' ? (
+                  <div className="ute-ruby-text">
+                    {result.rubyPairs.map((pair) => (
+                      <ruby key={`${pair.surface}-${pair.reading}`}>
+                        {pair.surface}
+                        <rt>{pair.reading}</rt>
+                      </ruby>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="ute-lyric-text">{result.romaji}</div>
+                )
               ) : (
                 <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span className="ute-empty-tip">尚未输入歌词</span>} />
               )}
