@@ -122,7 +122,7 @@ TEST_SAVE_PATH=fast-api\audio\
 }
 ```
 
-- `ruby_pairs` 中首元素为 `null` 表示该假名对应前一个字符的余部（如送假名）。
+- `ruby_pairs` 中首元素为 `null` 表示该读音片段没有对应的新表记字符。
 - `audio_feature.json`（MVP 阶段暂时不做）建议占位结构：`{ "energy": [...], "f0_stats": {...}, "spectral": {...}, "emotion": {...} }`，时间轴与音频帧对齐，前端按进度条取对应段。
 
 ## 8. Supabase 后端规范
