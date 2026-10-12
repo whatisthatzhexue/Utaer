@@ -196,9 +196,10 @@ def run_engine(ctx: MorphList, rules: list[Rule] | None = None) -> None:
     第一遍（DERIVATION，逐 idx 扫描）：按 ``(-priority, rule_id)`` 顺序询问规则，
     首个 ``match`` 且未占用者 ``apply``；已推导（``accent is not None``）或已
     被占用（``claimed``）的形态素跳过。
-    第二遍（DERIVATION 中的整句规则，如 R-MULTI-UNIT）：在扫描后按序执行。
-    第三遍（VALIDATION）：校验型规则对每个形态素循环 ``match``/``apply`` 直至合法
+    第二遍（VALIDATION）：校验型规则对每个形态素循环 ``match``/``apply`` 直至合法
     （核移位修正始终在全部推导之后生效，见模块 docstring）。
+    第三遍（DERIVATION 中的整句规则，如 R-MULTI-UNIT）：在全部推导与校验之后执行，
+    使整句渲染（报告 result）反映**最终**调型（含核移位修正后的状态）。
     """
     if rules is None:
         rules = registry
@@ -217,20 +218,20 @@ def run_engine(ctx: MorphList, rules: list[Rule] | None = None) -> None:
                 rule.apply(ctx, i)
                 break
 
-    # 第二遍：整句规则（単位切分等）
-    for rule in sequence:
-        try:
-            rule.apply(ctx, 0)
-        except Exception as exc:  # 规则异常不应阻断管线，但需可见
-            logger.error("整句规则 %s 执行失败：%s", rule.rule_id, exc)
-
-    # 第三遍：后处理校验（如核合法性；可多轮修正至合法）
+    # 第二遍：后处理校验（如核合法性；可多轮修正至合法）
     for rule in validation:
         for i in range(len(ctx)):
             guard = 0
             while rule.match(ctx, i) and guard < 16:
                 rule.apply(ctx, i)
                 guard += 1
+
+    # 第三遍：整句规则（単位切分与整句渲染；此时调型已是最终态）
+    for rule in sequence:
+        try:
+            rule.apply(ctx, 0)
+        except Exception as exc:  # 规则异常不应阻断管线，但需可见
+            logger.error("整句规则 %s 执行失败：%s", rule.rule_id, exc)
 
 
 #: 模块级注册表：导入时按默认配置构建一次（教程 4.3 的验证命令直接引用）

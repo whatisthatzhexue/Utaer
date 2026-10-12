@@ -6,5 +6,6 @@
     "盛る": {"accent_raw": "0"}
   },
   "resegment": {"enabled": true},
-  "nucleus_legality": {"avoid_devoiced": false}
+  "nucleus_legality": {"avoid_devoiced": false},
+  "compound": {"nhk_flat_exceptions_priority": true}
 }

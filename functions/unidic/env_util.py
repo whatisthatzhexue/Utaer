@@ -42,6 +42,8 @@ DEFAULT_RULES_CONFIG: dict = {
     "homograph_overrides": {},     # {表層形: {"reading": ..., "pron": ..., "accent_raw": ...}}
     "resegment": {"enabled": True},
     "nucleus_legality": {"avoid_devoiced": False},
+    # 复合词：NHK Ⅰ複合名詞①平板例外表（〜語/化/間/顔/級/金/性/製/的）优先于词典 C 值
+    "compound": {"nhk_flat_exceptions_priority": True},
 }
 
 
@@ -140,7 +142,7 @@ def load_rules_config(path: Path | None = None) -> dict:
         return config
     for key, value in data.items():
         if (
-            key in ("resegment", "nucleus_legality")
+            key in ("resegment", "nucleus_legality", "compound")
             and isinstance(value, dict)
             and isinstance(config.get(key), dict)
         ):

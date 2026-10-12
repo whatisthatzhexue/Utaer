@@ -18,6 +18,11 @@
   后部 1–2 拍 → 几乎全为前部末型（部分平板例外 〜語・化・間・顔・級・金・性・製・的）；
   后部 3–4 拍 → 平板/頭高（尾高）的后部词为後部一型，其余为後部保存型；
   后部 ≥5 拍 → 後部保存型；
+- **平板例外表优先级**（NHK Ⅰ複合名詞 ①原文「一部分は平板型：《例》〜語，〜化，〜間
+  （1拍）；〜顔，〜級，〜金，〜性，〜製，〜的（2拍）」）：上述后部要素默认
+  **优先于词典 C 值** 取 C4 平板型（资料三惯例优先，如 語 的词典值 C3 → 平板；
+  例：日本語（日本+語 切分时）→ 平板）。可在 rules_config.json 的
+  ``compound.nhk_flat_exceptions_priority`` 置 false 恢复词典严密优先；
 - 前部末型遇前部末拍为特殊拍/二重母音副音 → 由 ``R-NUCLEUS-SPECIAL``（校验遍）
   前移核，形成完整链路（住民税：C3 → ジューミン＼ゼイ → 移位 → ジューミ＼ンゼイ）。
 
@@ -64,13 +69,19 @@ def _eligible_pair(morphs: MorphList, i: int) -> bool:
     return True
 
 
-def _rear_connection_type(rear: MorphState) -> str | None:
-    """返回后部要素的结合型：词典字段优先，无字段时按 NHK 拍数规律兜底判定。
+def _rear_connection_type(rear: MorphState, nhk_flat_first: bool = True) -> str | None:
+    """返回后部要素的结合型（确定性判定，见模块 docstring）。
 
+    - ``nhk_flat_first``（默认 true）：``FLAT_REAR_EXCEPTIONS``（NHK Ⅰ複合名詞 ①
+    原文列出的「一部分平板型」：〜語・化・間・顔・級・金・性・製・的）**优先**于
+    词典 C 值 → C4 平板型（资料三 NHK 惯例优先，可在 rules_config.json 的
+    ``compound.nhk_flat_exceptions_priority`` 关闭）；
     - ``a_con_type`` 为 C1–C5 → 直接采用（资料二，确切匹配）；
-    - ``a_con_type`` 为空 → NHK Ⅰ複合名詞 拍数规律（資料三）；
+    - ``a_con_type`` 为空 → NHK Ⅰ複合名詞 拍数规律（资料三）；
     - 其他值（P 系列接頭辞 / F 系列付属語）→ 非复合词结合型，返回 None。
     """
+    if nhk_flat_first and rear.morph in FLAT_REAR_EXCEPTIONS:
+        return "C4"
     a_con = rear.a_con_type.strip().upper()
     if a_con in CONNECTION_TYPES:
         return a_con
@@ -97,11 +108,16 @@ class _CompoundBase(Rule):
     c_name: str = ""                      # 四型中文名
     priority = 250
     phase = RulePhase.DERIVATION
+    config_section = "compound"           # rules_config.json 的 compound 节注入 options
+
+    def _nhk_flat_first(self) -> bool:
+        """NHK 平板例外表是否优先于词典 C 值（默认 true，可配置）。"""
+        return bool(self.options.get("nhk_flat_exceptions_priority", True))
 
     def match(self, morphs: MorphList, i: int) -> bool:
         if not _eligible_pair(morphs, i):
             return False
-        return _rear_connection_type(morphs[i + 1]) == self.c_type
+        return _rear_connection_type(morphs[i + 1], self._nhk_flat_first()) == self.c_type
 
     def apply(self, morphs: MorphList, i: int) -> None:
         front, rear = morphs[i], morphs[i + 1]
@@ -135,8 +151,12 @@ class _CompoundBase(Rule):
         front.derived_by = self.rule_id
         rear.derived_by = self.rule_id
 
-        from_field = "C1–C5（資料二 表10）" if rear.a_con_type.strip().upper() in CONNECTION_TYPES \
-            else "无结合型字段，按 NHK Ⅰ複合名詞 拍数规律兜底判定"
+        if self._nhk_flat_first() and rear.morph in FLAT_REAR_EXCEPTIONS:
+            from_field = "NHK Ⅰ複合名詞 ①平板例外表（〜語・化・間・顔・級・金・性・製・的；资料三优先）"
+        elif rear.a_con_type.strip().upper() in CONNECTION_TYPES:
+            from_field = "C1–C5（資料二 表10）"
+        else:
+            from_field = "无结合型字段，按 NHK Ⅰ複合名詞 拍数规律兜底判定"
         logic = (
             f"后部要素「{rear.morph}」アクセント結合型 {self.c_type} → "
             f"複合語アクセント型 = {formula} ＝{self.c_name}；依据：{from_field}"

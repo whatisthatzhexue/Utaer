@@ -391,6 +391,9 @@ def check_sample_sentences(config: dict) -> None:
     check("コーヒーを飲みます。→ コーヒ＼ーオ・ノミマ＼ス（コーヒー=3调）",
           full_render("コーヒーを飲みます。") == "コーヒ＼ーオ・ノミマ＼ス",
           full_render("コーヒーを飲みます。"))
+    check("日本語を勉強します。→ ニッポンゴオ━・ベンキョーシマ＼ス（平板例外：語）",
+          full_render("日本語を勉強します。") == "ニッポンゴオ━・ベンキョーシマ＼ス",
+          full_render("日本語を勉強します。"))
     check("学生が本を読む。→ ガクセイガ━・ホ＼ンオ・ヨ＼ム",
           full_render("学生が本を読む。") == "ガクセイガ━・ホ＼ンオ・ヨ＼ム",
           full_render("学生が本を読む。"))
@@ -406,6 +409,35 @@ def check_sample_sentences(config: dict) -> None:
     check("住民税を払います。→ ジューミ＼ンゼイオ・ハライマ＼ス",
           full_render("住民税を払います。") == "ジューミ＼ンゼイオ・ハライマ＼ス",
           full_render("住民税を払います。"))
+
+
+# ------------------------------------- 6.8 复合词平板例外表优先级（P2）
+def check_compound_flat_exceptions(config: dict, tagger) -> None:
+    _section("复合词平板例外表优先级（NHK Ⅰ複合名詞① vs 词典 C 值 + 配置开关）")
+
+    overrides = config.get("homograph_overrides", {})
+    parsed = stage1_analyzer.analyze("日本語を", tagger, overrides)
+    pair = [m for m in parsed.morphs if m.morph in ("日本", "語")]
+    check("前置数据：日本＋語（語 的词典 aCon 值 C3，NHK 例外表列其为平板）",
+          len(pair) == 2 and pair[1].a_con_type.strip().upper() == "C3",
+          json.dumps([m.a_con_type for m in pair], ensure_ascii=False))
+
+    ctx = MorphList([MorphState.from_morph(m) for m in pair])
+    run_engine(ctx, load_registry(config))
+    check("默认（NHK 平板例外优先）：R-COMPOUND-C4 → ニッポンゴ━",
+          bool(ctx.report) and ctx.report[0]["rule_id"] == "R-COMPOUND-C4"
+          and ctx.render_units() == "ニッポンゴ━",
+          json.dumps([r["rule_id"] for r in ctx.report], ensure_ascii=False)
+          + " / " + ctx.render_units())
+
+    ctx_off = MorphList([MorphState.from_morph(m) for m in pair])
+    off_config = {**config, "compound": {"nhk_flat_exceptions_priority": False}}
+    run_engine(ctx_off, load_registry(off_config))
+    check("关闭开关（词典严密优先）：R-COMPOUND-C3 → ニッポ＼ンゴ（核移位后）",
+          bool(ctx_off.report) and ctx_off.report[0]["rule_id"] == "R-COMPOUND-C3"
+          and ctx_off.render_units() == "ニッポ＼ンゴ",
+          json.dumps([r["rule_id"] for r in ctx_off.report], ensure_ascii=False)
+          + " / " + ctx_off.render_units())
 
 
 # ------------------------------------------------------------- 7. 注册表与配置
@@ -480,6 +512,7 @@ def main() -> int:
     check_fallback(config)
     check_particles_m4(config)
     check_verb_connection(config, tagger)
+    check_compound_flat_exceptions(config, tagger)
     check_sample_sentences(config)
     check_registry(config)
     check_artifacts(config)
