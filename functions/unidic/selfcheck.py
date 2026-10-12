@@ -52,6 +52,47 @@ def _section(title: str) -> None:
     print(f"\n===== {title} =====")
 
 
+# ------------------------------------------- 0. 服务层入口契约（analyze_text）
+def check_service_api(config: dict) -> None:
+    _section("服务层唯一入口 analyze_text（text+tokens，音拍级 H/L 展开）")
+
+    r = pipeline.analyze_text("米を盛る")
+    check("顶层结构 version/text/tokens",
+          sorted(r.keys()) == ["text", "tokens", "version"]
+          and r["version"] == pipeline.SERVICE_API_VERSION)
+    check("text 原样保留", r["text"] == "米を盛る")
+    tokens = r["tokens"]
+    check("米：moras+pitch L,H（尾高核显现）",
+          tokens[0]["moras"] == ["コ", "メ"] and tokens[0]["pitch"] == ["L", "H"]
+          and tokens[0]["unit"] == 0)
+    check("を：同単位継続 L", tokens[1]["pitch"] == ["L"] and tokens[1]["unit"] == 0)
+    check("盛る：平板単位 L,H", tokens[2]["pitch"] == ["L", "H"] and tokens[2]["unit"] == 1)
+
+    r2 = pipeline.analyze_text("私は学生です。")
+    by_morph = {x["morph"]: x for x in r2["tokens"]}
+    check("学生です：ガクセイデ＼ス（L H H H + H L）",
+          by_morph["学生"]["pitch"] == ["L", "H", "H", "H"]
+          and by_morph["です"]["pitch"] == ["H", "L"])
+    check("标点：空 moras/pitch 且归属単位",
+          by_morph["。"]["moras"] == [] and by_morph["。"]["pitch"] == []
+          and by_morph["。"]["unit"] == 1)
+
+    r3 = pipeline.analyze_text("米を盛る\n東京駅")
+    check("多行：idx 全句连续", [x["idx"] for x in r3["tokens"]] == [0, 1, 2, 3])
+    check("多行：unit 全句连续（第2行从 2 起）", r3["tokens"][3]["unit"] == 2)
+    check("頭高展开 東京駅（F=3 → L H H L L L）",
+          r3["tokens"][3]["pitch"] == ["L", "H", "H", "L", "L", "L"])
+    check("text 保留换行原样", r3["text"] == "米を盛る\n東京駅")
+
+    try:
+        pipeline.analyze_text("")
+        check("空文本 → ValueError", False)
+    except ValueError:
+        check("空文本 → ValueError", True)
+
+    check("确定性：两次调用全等", pipeline.analyze_text("米を盛る") == r)
+
+
 # ---------------------------------------------------------------- 1. mora_util
 def check_mora_util() -> None:
     _section("mora_util 纯函数（括号解码/拍数/判定/渲染）")
@@ -680,6 +721,7 @@ def main() -> int:
 
     config = env_util.load_rules_config()
 
+    check_service_api(config)
     check_mora_util()
     check_ruby_util()
     check_sample1(config)

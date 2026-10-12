@@ -18,11 +18,13 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import env_util
+import mora_util
 import resegment
 import ruby_util
 import stage1_analyzer
@@ -63,6 +65,40 @@ def run_pipeline(
     return result.accent_json, result.rule_report
 
 
+#: 分析锁：MeCab Tagger 为进程内共享实例（C++ 层非线程安全），
+#: 服务化部署（多线程/协程并发调用 analyze_text）时须串行化解析；
+#: 单请求耗时毫秒级，对吞吐影响可忽略。
+_ANALYZE_LOCK = threading.Lock()
+
+
+def _run_context(
+    text: str, config: dict[str, Any] | None = None
+) -> tuple[MorphList, Any, dict[str, Any]]:
+    """内部：运行双阶段管线，返回 ``(规则上下文, 阶段一结果, 生效配置)``。"""
+    if not text or not text.strip():
+        raise ValueError("输入文本为空，无法运行双阶段管线")
+    config = config if config is not None else env_util.load_rules_config()
+
+    with _ANALYZE_LOCK:
+        # 阶段一：词典确切匹配（禁止调型推测）
+        tagger = stage1_analyzer.build_tagger()
+        stage1_result = stage1_analyzer.analyze(
+            text, tagger, config.get("homograph_overrides", {})
+        )
+
+        # 阶段二：确定性规则引擎（两遍执行）
+        ctx = MorphList(
+            (MorphState.from_morph(m) for m in stage1_result.morphs),
+            input_text=text,
+        )
+        # 预处理：真未收录整词的确定性词典再切分（rules_config.json 的 resegment.enabled 开关）
+        if bool((config.get("resegment") or {}).get("enabled", True)):
+            resegment.resegment_unknowns(ctx, tagger, config.get("homograph_overrides", {}))
+        rules = load_registry(config)
+        run_engine(ctx, rules)
+    return ctx, stage1_result, config
+
+
 def run_pipeline_full(
     text: str,
     *,
@@ -75,26 +111,7 @@ def run_pipeline_full(
     :raises ValueError: 文本为空或全空白。
     :raises stage1_analyzer.Stage1Error: 词典缺失或 MeCab 初始化失败。
     """
-    if not text or not text.strip():
-        raise ValueError("输入文本为空，无法运行双阶段管线")
-    config = config if config is not None else env_util.load_rules_config()
-
-    # 阶段一：词典确切匹配（禁止调型推测）
-    tagger = stage1_analyzer.build_tagger()
-    stage1_result = stage1_analyzer.analyze(
-        text, tagger, config.get("homograph_overrides", {})
-    )
-
-    # 阶段二：确定性规则引擎（两遍执行）
-    ctx = MorphList(
-        (MorphState.from_morph(m) for m in stage1_result.morphs),
-        input_text=text,
-    )
-    # 预处理：真未收录整词的确定性词典再切分（rules_config.json 的 resegment.enabled 开关）
-    if bool((config.get("resegment") or {}).get("enabled", True)):
-        resegment.resegment_unknowns(ctx, tagger, config.get("homograph_overrides", {}))
-    rules = load_registry(config)
-    run_engine(ctx, rules)
+    ctx, stage1_result, _config = _run_context(text, config)
 
     accent_json = assemble_accent_json(ctx)
     rule_report = assemble_rule_report(ctx) if write_report else None
@@ -107,6 +124,112 @@ def run_pipeline_full(
         rule_report=rule_report,
         raw_lines=stage1_result.raw_lines,
     )
+
+
+#: ``analyze_text`` 输出结构的契约版本（字段增删/语义变更时升版，见 ENGINE_USAGE.md）
+SERVICE_API_VERSION = "1.0"
+
+
+def analyze_text(text: str, *, config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """【服务层唯一入口】分析原始日语文本，返回含 ``text`` + ``tokens`` 的 dict。
+
+    - 输入：原始日语文本（可含标点与换行；换行按「行=句」处理，逐行分析后合并）；
+    - 输出：``{"version": ..., "text": <原文本>, "tokens": [...]}``——
+      每个 token 含表記/读音/词性/声调核位置（``accent``）/变体/振假名，
+      以及**音拍级 H/L 展开**（``moras`` + ``pitch``）与所属アクセント単位（``unit``）；
+    - 内部完成：MeCab 分词 → UniDic 调型 → 规则引擎推导 → 音拍级 H/L 展开；
+    - 确定性：同一输入必得同一输出；不做任何调型推测（禁用 s2ya/sy2a）。
+
+    字段级契约与 H/L 展开规则见 ``docs/ENGINE_USAGE.md``（服务层只允许调用本函数）。
+
+    :raises ValueError: 文本为空或全空白行。
+    :raises stage1_analyzer.Stage1Error: 词典缺失或 MeCab 初始化失败。
+    """
+    lines = [line for line in text.splitlines() if line.strip()] if text else []
+    if not lines:
+        raise ValueError("输入文本为空，无法分析")
+
+    tokens: list[dict[str, Any]] = []
+    idx_offset = 0
+    unit_offset = 0
+    for line in lines:
+        ctx, _stage1_result, _config = _run_context(line, config)
+        tokens.extend(assemble_service_tokens(ctx, idx_offset=idx_offset, unit_offset=unit_offset))
+        idx_offset += len(ctx)
+        unit_offset += (ctx.units[-1].unit_id + 1) if ctx.units else 0
+    return {"version": SERVICE_API_VERSION, "text": text, "tokens": tokens}
+
+
+def _unit_h_l(ctx: MorphList, unit: Any) -> list[list[str]]:
+    """计算一个アクセント単位的音拍级 H/L 序列，并按形态素切分返回。
+
+    规则（东京式，単位内重置）：
+
+    - 无下降核（平板型）→ 第1拍 L、其余 H；
+    - 核在第 1 拍（頭高型）→ 第1拍 H、其余 L；
+    - 核在第 F 拍（2≤F≤拍数）→ 前 F 拍「L H…H」、其后全 L；
+    标点等无读音形态素返回空列表。
+    """
+    moras_per: list[list[str]] = [
+        mora_util.split_moras(ctx[k].pron) for k in range(unit.start, unit.end + 1)
+    ]
+    total = sum(len(m) for m in moras_per)
+    if total == 0:
+        return [[] for _ in moras_per]
+
+    fall = 0
+    offset = 0
+    for k in range(unit.start, unit.end + 1):
+        morph = ctx[k]
+        if fall == 0 and morph.accent is not None and morph.accent > 0:
+            fall = offset + int(morph.accent)
+        offset += len(mora_util.split_moras(morph.pron))
+
+    if fall <= 0:
+        hl = ["L"] + ["H"] * (total - 1)
+    elif fall == 1:
+        hl = ["H"] + ["L"] * (total - 1)
+    else:
+        f = min(fall, total)
+        hl = ["L"] + ["H"] * (f - 1) + ["L"] * (total - f)
+
+    result: list[list[str]] = []
+    pos = 0
+    for moras in moras_per:
+        result.append(hl[pos:pos + len(moras)])
+        pos += len(moras)
+    return result
+
+
+def assemble_service_tokens(
+    ctx: MorphList, idx_offset: int = 0, unit_offset: int = 0
+) -> list[dict[str, Any]]:
+    """组装服务契约的 ``tokens`` 列表（字段与 ``audio_accent.json`` 对齐并扩展）。"""
+    tokens: list[dict[str, Any]] = []
+    for morph in ctx:
+        accent = int(morph.accent) if morph.accent is not None else 0
+        item: dict[str, Any] = {
+            "idx": idx_offset + morph.idx,
+            "morph": morph.morph,
+            "lemma": morph.lemma,
+            "morph_reading": morph.pron,
+            "pos": morph.pos.replace("-", "*"),
+            "accent": accent,
+            "variants": list(morph.variants),
+            "ruby_pairs": ruby_util.align_ruby_pairs(morph.morph, morph.reading or morph.pron),
+            "moras": mora_util.split_moras(morph.pron),
+            "pitch": [],
+            "unit": unit_offset + (morph.unit_id if morph.unit_id is not None else 0),
+        }
+        if morph.notes:
+            item["notes"] = list(morph.notes)
+        tokens.append(item)
+
+    for unit in ctx.units:
+        contours = _unit_h_l(ctx, unit)
+        for k, hl in zip(range(unit.start, unit.end + 1), contours):
+            tokens[k]["pitch"] = hl
+    return tokens
 
 
 def assemble_accent_json(ctx: MorphList) -> dict[str, Any]:
