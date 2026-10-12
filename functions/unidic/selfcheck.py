@@ -391,8 +391,8 @@ def check_sample_sentences(config: dict) -> None:
     check("コーヒーを飲みます。→ コーヒ＼ーオ・ノミマ＼ス（コーヒー=3调）",
           full_render("コーヒーを飲みます。") == "コーヒ＼ーオ・ノミマ＼ス",
           full_render("コーヒーを飲みます。"))
-    check("日本語を勉強します。→ ニッポンゴオ━・ベンキョーシマ＼ス（平板例外：語）",
-          full_render("日本語を勉強します。") == "ニッポンゴオ━・ベンキョーシマ＼ス",
+    check("日本語を勉強します。→ ニホンゴオ━・ベンキョーシマ＼ス（日本=ニホン；平板例外：語）",
+          full_render("日本語を勉強します。") == "ニホンゴオ━・ベンキョーシマ＼ス",
           full_render("日本語を勉強します。"))
     check("学生が本を読む。→ ガクセイガ━・ホ＼ンオ・ヨ＼ム",
           full_render("学生が本を読む。") == "ガクセイガ━・ホ＼ンオ・ヨ＼ム",
@@ -411,6 +411,25 @@ def check_sample_sentences(config: dict) -> None:
           full_render("住民税を払います。"))
 
 
+# ------------------------------------- 6.75 同形語修正表（日本=ニホン 等）
+def check_homograph_overrides(config: dict, tagger) -> None:
+    _section("同形語修正表（日本→ニホン 全词族；用户指定「所有日本=にほん」）")
+
+    overrides = config.get("homograph_overrides", {})
+
+    def first_morph(text: str) -> tuple[str, str, str]:
+        r = stage1_analyzer.analyze(text, tagger, overrides)
+        m = r.morphs[0]
+        return m.morph, m.pron, m.accent_raw
+
+    check("日本 → ニホン（调型2）", first_morph("日本") == ("日本", "ニホン", "2"),
+          str(first_morph("日本")))
+    check("日本語を 的拆分成分 日本 → ニホン", first_morph("日本語を") == ("日本", "ニホン", "2"),
+          str(first_morph("日本語を")))
+    check("日本人 → ニホンジン（调型4＝ニホンジ＼ン；NHK Ⅲ-1 原文佐证）",
+          first_morph("日本人") == ("日本人", "ニホンジン", "4"), str(first_morph("日本人")))
+
+
 # ------------------------------------- 6.8 复合词平板例外表优先级（P2）
 def check_compound_flat_exceptions(config: dict, tagger) -> None:
     _section("复合词平板例外表优先级（NHK Ⅰ複合名詞① vs 词典 C 值 + 配置开关）")
@@ -424,18 +443,18 @@ def check_compound_flat_exceptions(config: dict, tagger) -> None:
 
     ctx = MorphList([MorphState.from_morph(m) for m in pair])
     run_engine(ctx, load_registry(config))
-    check("默认（NHK 平板例外优先）：R-COMPOUND-C4 → ニッポンゴ━",
+    check("默认（NHK 平板例外优先）：R-COMPOUND-C4 → ニホンゴ━",
           bool(ctx.report) and ctx.report[0]["rule_id"] == "R-COMPOUND-C4"
-          and ctx.render_units() == "ニッポンゴ━",
+          and ctx.render_units() == "ニホンゴ━",
           json.dumps([r["rule_id"] for r in ctx.report], ensure_ascii=False)
           + " / " + ctx.render_units())
 
     ctx_off = MorphList([MorphState.from_morph(m) for m in pair])
     off_config = {**config, "compound": {"nhk_flat_exceptions_priority": False}}
     run_engine(ctx_off, load_registry(off_config))
-    check("关闭开关（词典严密优先）：R-COMPOUND-C3 → ニッポ＼ンゴ（核移位后）",
+    check("关闭开关（词典严密优先）：R-COMPOUND-C3 → ニホ＼ンゴ（核移位后）",
           bool(ctx_off.report) and ctx_off.report[0]["rule_id"] == "R-COMPOUND-C3"
-          and ctx_off.render_units() == "ニッポ＼ンゴ",
+          and ctx_off.render_units() == "ニホ＼ンゴ",
           json.dumps([r["rule_id"] for r in ctx_off.report], ensure_ascii=False)
           + " / " + ctx_off.render_units())
 
@@ -512,6 +531,7 @@ def main() -> int:
     check_fallback(config)
     check_particles_m4(config)
     check_verb_connection(config, tagger)
+    check_homograph_overrides(config, tagger)
     check_compound_flat_exceptions(config, tagger)
     check_sample_sentences(config)
     check_registry(config)

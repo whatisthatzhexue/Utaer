@@ -3,7 +3,9 @@
   "custom_rules_dir": "stage2_rules/custom",
   "homograph_overrides": {
     "米": {"reading": "コメ", "pron": "コメ", "accent_raw": "2"},
-    "盛る": {"accent_raw": "0"}
+    "盛る": {"accent_raw": "0"},
+    "日本": {"reading": "ニホン", "pron": "ニホン", "accent_raw": "2"},
+    "日本人": {"reading": "ニホンジン", "pron": "ニホンジン", "accent_raw": "4"}
   },
   "resegment": {"enabled": true},
   "nucleus_legality": {"avoid_devoiced": false},
