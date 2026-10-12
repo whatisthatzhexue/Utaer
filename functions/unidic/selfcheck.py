@@ -465,6 +465,40 @@ def check_adjective_connection(config: dict, tagger) -> None:
     check("甘くなる → アマクナ＼ル", full_render("甘くなる") == "アマクナ＼ル", full_render("甘くなる"))
 
 
+# ----------------------------------- 6.6c 活用形・アクセント修飾型（表9 / NHK Ⅲ-2）
+def check_conjugation_mod(config: dict, tagger) -> None:
+    _section("资料二 表9 アクセント修飾型＋命令形（R-CONJ-MOD）")
+
+    overrides = config.get("homograph_overrides", {})
+    rules = load_registry(config)
+
+    def full_render(text: str) -> str:
+        r = stage1_analyzer.analyze(text, tagger, overrides)
+        ctx = MorphList([MorphState.from_morph(m) for m in r.morphs])
+        resegment.resegment_unknowns(ctx, tagger, overrides)
+        run_engine(ctx, rules)
+        return ctx.render_units()
+
+    # 意志推量形（词典 M1@1：N0 − M；NHK Ⅲ-2 一览表 タベヨ＼ー 等）
+    check("食べよう → タベヨ＼ー（M1@1 = N0−1；NHK 一览表）",
+          full_render("食べよう") == "タベヨ＼ー", full_render("食べよう"))
+    check("飲もう → ノモ＼ー", full_render("飲もう") == "ノモ＼ー", full_render("飲もう"))
+    check("帰ろう → カエロ＼ー", full_render("帰ろう") == "カエロ＼ー", full_render("帰ろう"))
+    # たかっ/たけれ（词典 M2@2；NHK 4.1 〜タ＼カッタ/〜タ＼ケレバ）
+    check("食べたかった → タベタ＼カッタ（NHK 4.1 〜タ＼カッタ）",
+          full_render("食べたかった") == "タベタ＼カッタ", full_render("食べたかった"))
+    check("食べたければ → タベタケ＼レバ",
+          full_render("食べたければ") == "タベタケ＼レバ", full_render("食べたければ"))
+    # 命令形（NHK 一览表：タベ＼ロ、ノ＼メ、コ＼イ）
+    check("食べろ → タベ＼ロ（NHK 一览表原文）", full_render("食べろ") == "タベ＼ロ", full_render("食べろ"))
+    check("飲め → ノ＼メ", full_render("飲め") == "ノ＼メ", full_render("飲め"))
+    check("起きろ → オキ＼ロ", full_render("起きろ") == "オキ＼ロ", full_render("起きろ"))
+    check("来い → コ＼イ", full_render("来い") == "コ＼イ", full_render("来い"))
+    # 冲突让位：たら 由 TA-TE 家族处理（词典 M2@1 与 NHK 表冲突 → 资料三优先）
+    check("食べたら → タ＼ベタラ（CONJ-MOD 让位 TA-TE）",
+          full_render("食べたら") == "タ＼ベタラ", full_render("食べたら"))
+
+
 # ------------------------------------------- 6.65 数詞＋助数詞2単位語（NHK Ⅱ）
 def check_numeral_two_unit(config: dict, tagger) -> None:
     _section("NHK Ⅱ 数詞＋助数詞・2単位語（15/14/19＋2拍以下助数詞）")
@@ -620,6 +654,7 @@ def main() -> int:
     check_particles_m4(config)
     check_verb_connection(config, tagger)
     check_adjective_connection(config, tagger)
+    check_conjugation_mod(config, tagger)
     check_numeral_two_unit(config, tagger)
     check_homograph_overrides(config, tagger)
     check_compound_flat_exceptions(config, tagger)
