@@ -26,7 +26,10 @@ logger = logging.getLogger(__name__)
 
 
 def compute_units(morphs: MorphList) -> list[Unit]:
-    """按 NHK 複数単位规则切分アクセント単位（确定性，见模块 docstring）。"""
+    """按 NHK 複数単位规则切分アクセント単位（确定性，见模块 docstring）。
+
+    ``new_unit`` 标记（如起伏式付属語核作为第 2 単位）优先于一切并入规则。
+    """
     if not morphs:
         return []
     units: list[Unit] = []
@@ -35,10 +38,13 @@ def compute_units(morphs: MorphList) -> list[Unit]:
         morph = morphs[i]
         prev = morphs[i - 1]
         attach = (
-            morph.is_particle_like          # 付属語紧跟前部（NHK Ⅲ-1 付属語不干渉）
-            or morph.is_symbol              # 标点等记号并入前单位
-            or prev.join_next               # 复合词/接辞合并标记
-            or prev.pos_head == "接頭辞"     # 接头辞与其后续词同单位
+            not morph.new_unit               # 强制新単位标记优先（起伏式付属語第 2 単位等）
+            and (
+                morph.is_particle_like      # 付属語紧跟前部（NHK Ⅲ-1 付属語不干渉）
+                or morph.is_symbol          # 标点等记号并入前单位
+                or prev.join_next           # 复合词/接辞合并标记
+                or prev.pos_head == "接頭辞"  # 接头辞与其后续词同单位
+            )
         )
         if not attach:
             units.append(Unit(unit_id=len(units), start=start, end=i - 1))

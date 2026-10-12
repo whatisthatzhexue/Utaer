@@ -235,6 +235,93 @@ def check_fallback(config: dict) -> None:
     run_engine(ctx, load_registry(config))
     check("外来語3拍（末拍ン）→ 中高型 accent=2", ctx[0].accent == 2)
 
+    # —— M4 补充語種倾向分支 ——
+    ctx = MorphList([fake_unknown("燵灯", "タツヒ", 3)])
+    run_engine(ctx, load_registry(config))
+    check("二字漢語3拍（名词性）→ 頭高 accent=1",
+          ctx[0].accent == 1 and ctx.report[0]["rule_id"] == "R-FALLBACK-GOSHU-KANGO21")
+
+    ctx = MorphList([fake_unknown("燵灯", "タツヒ", 3, pos="名詞-普通名詞-サ変可能")])
+    run_engine(ctx, load_registry(config))
+    check("二字漢語3拍（サ変可能）→ 平板 accent=0", ctx[0].accent == 0)
+
+    ctx = MorphList([fake_unknown("燵燵", "タツタツ", 4)])
+    run_engine(ctx, load_registry(config))
+    check("二字漢語4拍（2+2）→ 平板 accent=0",
+          ctx[0].accent == 0 and ctx.report[0]["rule_id"] == "R-FALLBACK-GOSHU-KANGO22")
+
+    ctx = MorphList([fake_unknown("メロディー", "メロディー", 4)])
+    run_engine(ctx, load_registry(config))
+    check("外来語4拍（末拍長音）→ 頭高 accent=1",
+          ctx[0].accent == 1 and ctx.report[0]["rule_id"] == "R-FALLBACK-GOSHU-GAIRAI4")
+
+    ctx = MorphList([fake_unknown("カタカナ", "カタカナ", 4)])
+    run_engine(ctx, load_registry(config))
+    check("外来語4拍（无特殊拍）→ 平板 accent=0", ctx[0].accent == 0)
+
+    # [-4]（后ろから4番目の拍のあと）= 6 拍では位置 3（NHK Ⅲ全般 1.g 原文定义）
+    ctx = MorphList([fake_unknown("イデオロギー", "イデオロギー", 6)])
+    run_engine(ctx, load_registry(config))
+    check("外来語6拍（末拍長音）→ 中高[-4] accent=3",
+          ctx[0].accent == 3 and ctx.report[0]["rule_id"] == "R-FALLBACK-GOSHU-GAIRAI5",
+          f"accent={ctx[0].accent}")
+
+    # 落点撞上特殊拍（ー）时由核合法性规则前移（スマートカー: [-4]→3 落在「ー」→ 2）
+    ctx = MorphList([fake_unknown("スマートカー", "スマートカー", 6)])
+    run_engine(ctx, load_registry(config))
+    check("外来語[-4]落点遇長音 → 核合法性前移 accent=2",
+          ctx[0].accent == 2
+          and any(r["rule_id"] == "R-NUCLEUS-SPECIAL" for r in ctx.report),
+          f"accent={ctx[0].accent}")
+
+    ctx = MorphList([fake_unknown("めぐる", "メグル", 3, pos="動詞-一般")])
+    run_engine(ctx, load_registry(config))
+    check("動詞3拍 → 中高[-2] accent=2",
+          ctx[0].accent == 2 and ctx.report[0]["rule_id"] == "R-FALLBACK-GOSHU-VERB")
+
+    ctx = MorphList([fake_unknown("うつくしい", "ウツクシイ", 5, pos="形容詞-一般")])
+    run_engine(ctx, load_registry(config))
+    check("形容詞5拍 → 中高[-2] accent=4",
+          ctx[0].accent == 4 and ctx.report[0]["rule_id"] == "R-FALLBACK-GOSHU-ADJ")
+
+
+# --------------------------------------------- 6.5 名词付属語全套（表12 F 系列）
+def check_particles_m4(config: dict) -> None:
+    _section("资料二 表12 F 系列 / NHK Ⅲ-1（名词付属語全套）")
+
+    def last_result(text: str) -> str:
+        _, report = pipeline.run_pipeline(text, config=config)
+        assert report is not None
+        hits = [r for r in report["matched_rules"] if r["rule_id"].startswith("R-PART")]
+        return hits[-1]["result"] if hits else ""
+
+    check("酒まで → サケマ＼デ（NHK 1.2a 原文例；F2@1 前部0型）",
+          last_result("酒まで") == "サケマ＼デ", last_result("酒まで"))
+    check("みそまで → ミ＼ソ・マ＼デ（NHK 1.2b 原文例；前部核+第2単位）",
+          last_result("みそまで") == "ミ＼ソ・マ＼デ", last_result("みそまで"))
+    check("米まで → コメ＼・マ＼デ（NHK 1.2c 第一形式）",
+          last_result("米まで") == "コメ＼・マ＼デ", last_result("米まで"))
+    check("米ぐらい → コメグ＼ライ（NHK 2.2 原文例；F4@1 決定型）",
+          last_result("米ぐらい") == "コメグ＼ライ", last_result("米ぐらい"))
+    check("みそぐらい → ミソグ＼ライ（NHK 2.2 原文例）",
+          last_result("みそぐらい") == "ミソグ＼ライ", last_result("みそぐらい"))
+    # らしい の発音は ラシー（3 拍）——NHK 表記 ラシ＼イ ≙ 発音 ラシ＼ー（同一发音）
+    check("米らしい → コメラシ＼ー（NHK 2.2；F4@2 発音表记）",
+          last_result("米らしい") == "コメラシ＼ー", last_result("米らしい"))
+
+    accent, report = pipeline.run_pipeline("米の", config=config)
+    assert report is not None
+    no_odaka = [r for r in report["matched_rules"] if r["rule_id"] == "R-PART-NO-ODAKA"]
+    check("米の → コメノ━（NHK 2.1 尾高+の 平板化例外）",
+          bool(no_odaka) and no_odaka[0]["result"] == "コメノ━",
+          json.dumps(no_odaka, ensure_ascii=False))
+
+    # 「の」例外：数詞保留（イチ 尾高でも平板化しない条件检查——数值上应保留前部核）
+    accent, report = pipeline.run_pipeline("一の", config=config)
+    assert report is not None
+    check("一の → 数詞例外（不触发 R-PART-NO-ODAKA）",
+          not any(r["rule_id"] == "R-PART-NO-ODAKA" for r in report["matched_rules"]))
+
 
 # ------------------------------------------------------------- 7. 注册表与配置
 def check_registry(config: dict) -> None:
@@ -306,6 +393,7 @@ def main() -> int:
     check_sample2(config, tagger)
     check_invariants(config)
     check_fallback(config)
+    check_particles_m4(config)
     check_registry(config)
     check_artifacts(config)
 

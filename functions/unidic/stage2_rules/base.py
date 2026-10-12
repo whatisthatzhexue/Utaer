@@ -74,6 +74,7 @@ class MorphState:
     - ``derived_by``：写入 ``accent`` 的规则 rule_id（冲突裁定与报告溯源用）；
     - ``claimed``：已被更高优先级规则整段占用（如复合词合并的后部要素），后续规则跳过；
     - ``join_next``：与下一形态素同属一个アクセント単位（复合词/接辞合并标记）；
+    - ``new_unit``：强制在本形态素处开启新的アクセント単位（起伏式付属語核作第 2 単位等）；
     - ``unit_id``：所属アクセント単位（由 R-MULTI-UNIT 分配）；
     - ``notes``：附加说明（如「词典未收录」）。
     """
@@ -100,7 +101,8 @@ class MorphState:
     variants: list[int] = field(default_factory=list)
     derived_by: str | None = None
     claimed: bool = False
-    join_next: bool = False
+    join_next: bool = False          # 与下一形态素同属一个アクセント単位（复合词/接辞）
+    new_unit: bool = False           # 强制开启新アクセント単位（起伏式付属語第2単位等）
     unit_id: int | None = None
     notes: list[str] = field(default_factory=list)
 

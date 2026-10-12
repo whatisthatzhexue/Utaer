@@ -10,7 +10,9 @@
 规则清单：
 
 - ``R-LEX-DICT``：词典收录且调型有效 → 直取主值（逗号多调型的其余值进 variants）；
-- ``R-FALLBACK-HEIBAN``：兜底默认平板型（M3 起由更细的語種倾向规则先行截获）。
+- ``R-FALLBACK-GOSHU-*``：NHK Ⅲ全般 1. 語種倾向表分条兜底（KANGO11/KANGO21/
+  KANGO22/GAIRAI3/GAIRAI4/GAIRAI5/VERB/ADJ）；
+- ``R-FALLBACK-HEIBAN``：兜底默认平板型（語種倾向规则未截获时的终档）。
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ from __future__ import annotations
 import logging
 
 import mora_util
-from stage2_rules.base import MorphList, Rule, RulePhase, parse_accent_value
+from stage2_rules.base import MorphList, MorphState, Rule, RulePhase, parse_accent_value
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +137,201 @@ class GoshuGaira3Rule(Rule):
             f"「{morph.morph}」词典未收录（@ 且无 [] 标注）→ "
             f"按 NHK Ⅲ全般 1. e 語種倾向（外来語3拍以下は頭高型）取 调型={morph.accent}（{kind}）"
         )
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
+class GoshuKango21Rule(Rule):
+    """語種倾向兜底：二字漢語 3 拍（2+1／1+2）→ 頭高型（名词性；サ変可能→平板）。
+
+    NHK Ⅲ全般 1. b/c：二字漢語(2+1) 名词性头高、动词性多平板；
+    (1+2) 平板——本机数据无法确定性区分 2+1 与 1+2 结构，按名词性/サ変
+    两种 pos 分支处理（近似实现，见模块说明）。
+    """
+
+    rule_id = "R-FALLBACK-GOSHU-KANGO21"
+    name = "語種倾向兜底・二字漢語 3 拍"
+    source_ref = "NHK Ⅲ全般 1. b/c（二字漢語(2+1)/(1+2)）"
+    priority = 60
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        if morph.pos_head != "名詞" or morph.mora_count != 3:
+            return False
+        surface = morph.morph
+        return len(surface) == 2 and all(_is_kanji_char(ch) for ch in surface)
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        if "サ変" in morph.pos:               # 动词性多平板（NHK 1. b）
+            morph.accent = 0
+            kind = "平板型（动词性・サ変可能）"
+        else:
+            morph.accent = 1
+            kind = "頭高型"
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = f"「{morph.morph}」词典未收录 → 按 NHK Ⅲ全般 1. b/c 語種倾向取 {kind}"
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
+class GoshuKango22Rule(Rule):
+    """語種倾向兜底：二字漢語 4 拍（2+2）→ 平板型（NHK Ⅲ全般 1. d）。"""
+
+    rule_id = "R-FALLBACK-GOSHU-KANGO22"
+    name = "語種倾向兜底・二字漢語 4 拍・平板型"
+    source_ref = "NHK Ⅲ全般 1. d（二字漢語(2+2)は平板型）"
+    priority = 60
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        if morph.pos_head != "名詞" or morph.mora_count != 4:
+            return False
+        surface = morph.morph
+        return len(surface) == 2 and all(_is_kanji_char(ch) for ch in surface)
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        morph.accent = 0
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = f"「{morph.morph}」词典未收录 → 按 NHK Ⅲ全般 1. d 語種倾向（二字漢語(2+2)）取 平板型（0）"
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
+def _is_katakana_surface(morph: MorphState) -> bool:
+    """表層形是否为片假名（含长音符）。"""
+    surface = morph.morph
+    return bool(surface) and all(
+        mora_util.is_katakana(ch) or ch == "ー" for ch in surface
+    )
+
+
+class GoshuGaira4Rule(Rule):
+    """語種倾向兜底：外来語 4 拍（NHK Ⅲ全般 1. f）。
+
+    2 拍目特殊拍 → 頭高；3 拍目特殊拍 → 中高[-3]（=2）；末拍特殊拍 → 頭高；无特殊拍 → 平板。
+    """
+
+    rule_id = "R-FALLBACK-GOSHU-GAIRAI4"
+    name = "語種倾向兜底・外来語 4 拍"
+    source_ref = "NHK Ⅲ全般 1. f（外来語4拍：按特殊拍位置）"
+    priority = 60
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        return morph.mora_count == 4 and _is_katakana_surface(morph)
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        moras = mora_util.split_moras(morph.pron)
+        if len(moras) == 4 and mora_util.is_special_mora(moras[1]):
+            morph.accent, kind = 1, "頭高型（2 拍目特殊拍）"
+        elif len(moras) == 4 and mora_util.is_special_mora(moras[2]):
+            morph.accent, kind = 2, "中高型[-3]（3 拍目特殊拍）"
+        elif len(moras) == 4 and mora_util.is_special_mora(moras[3]):
+            morph.accent, kind = 1, "頭高型（末拍特殊拍）"
+        else:
+            morph.accent, kind = 0, "平板型（无特殊拍）"
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = f"「{morph.morph}」词典未收录 → 按 NHK Ⅲ全般 1. f 語種倾向取 {kind}"
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
+class GoshuGaira5Rule(Rule):
+    """語種倾向兜底：外来語 5 拍以上 → 中高[-3]；5/6 拍末长音 → 中高[-4]（NHK Ⅲ全般 1. g）。"""
+
+    rule_id = "R-FALLBACK-GOSHU-GAIRAI5"
+    name = "語種倾向兜底・外来語 5 拍以上・中高型"
+    source_ref = "NHK Ⅲ全般 1. g（外来語5拍以上は中高[-3]；末拍長音 5/6拍は [-4]）"
+    priority = 60
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        return morph.mora_count >= 5 and _is_katakana_surface(morph)
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        moras = mora_util.split_moras(morph.pron)
+        count = len(moras)
+        if count in (5, 6) and moras and moras[-1] == "ー":
+            morph.accent = max(1, count - 3)          # [-4]
+            kind = "中高型[-4]（末拍長音）"
+        else:
+            morph.accent = max(1, count - 2)          # [-3]
+            kind = "中高型[-3]"
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = f"「{morph.morph}」词典未收录 → 按 NHK Ⅲ全般 1. g 語種倾向取 {kind}"
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
+class GoshuVerbRule(Rule):
+    """語種倾向兜底：動詞（3 拍以上）→ 中高[-2]（NHK Ⅲ全般 1. i）。"""
+
+    rule_id = "R-FALLBACK-GOSHU-VERB"
+    name = "語種倾向兜底・動詞・中高型"
+    source_ref = "NHK Ⅲ全般 1. i（動詞3拍以上は中高[-2]）"
+    priority = 60
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        return morph.pos_head == "動詞" and morph.mora_count >= 3
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        morph.accent = max(1, morph.mora_count - 1)   # [-2]
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = f"「{morph.morph}」词典未收录 → 按 NHK Ⅲ全般 1. i 語種倾向（動詞3拍以上）取 中高型[-2]（{morph.accent}）"
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
+class GoshuAdjRule(Rule):
+    """語種倾向兜底：形容詞 → 中高[-2]；2 拍则頭高（NHK Ⅲ全般 1. j）。"""
+
+    rule_id = "R-FALLBACK-GOSHU-ADJ"
+    name = "語種倾向兜底・形容詞・中高型"
+    source_ref = "NHK Ⅲ全般 1. j（形容詞は中高[-2]；2拍は頭高）"
+    priority = 60
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        return morph.pos_head == "形容詞" and morph.mora_count >= 2
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        if morph.mora_count == 2:
+            morph.accent, kind = 1, "頭高型（2拍）"
+        else:
+            morph.accent, kind = max(1, morph.mora_count - 1), "中高型[-2]"
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = f"「{morph.morph}」词典未收录 → 按 NHK Ⅲ全般 1. j 語種倾向取 {kind}"
         morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
 
 
