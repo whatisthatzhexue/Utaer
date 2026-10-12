@@ -50,6 +50,11 @@ FLAT_REAR_EXCEPTIONS: frozenset[str] = frozenset({
     "語", "化", "間", "顔", "級", "金", "性", "製", "的",
 })
 
+#: NHK Ⅰ複合名詞 2）的肩書き（〜氏・名人・博士 等；个人名不复合规则对象）
+TITLE_WORDS: frozenset[str] = frozenset({
+    "氏", "名人", "博士", "監督", "議員", "教授", "司令官", "大臣", "長官",
+})
+
 #: 复合词的合法前部/后部品詞（资料二 表10 标题：普通名詞・接尾辞）
 FRONT_POS_HEADS: frozenset[str] = frozenset({"名詞"})
 REAR_POS_HEADS: frozenset[str] = frozenset({"名詞", "接尾辞"})
@@ -90,6 +95,10 @@ def _rear_connection_type(rear: MorphState, nhk_flat_first: bool = True) -> str 
     # —— 无结合型字段：NHK 拍数规律兜底（資料三） ——
     mora = rear.mora_count
     main, _ = parse_accent_value(rear.accent_raw)
+    # NHK Ⅰ 2）：普通语素＋肩書き（〜氏/名人/博士/監督 等）复合为 1 単位的默认型
+    # ＝後部一型（釣り名人 → ツリメ＼ージン、文学博士 → ブンガクハ＼クシ）
+    if rear.morph in TITLE_WORDS and mora <= 4:
+        return "C2"
     if mora <= 2:
         return "C4" if rear.morph in FLAT_REAR_EXCEPTIONS else "C3"
     if mora <= 4:
@@ -212,3 +221,45 @@ class CompoundC5Rule(_CompoundBase):
     source_ref = "资料二 UniDic 表10 C5"
     c_type = "C5"
     c_name = "前部アクセント保持"
+
+
+class CompoundNameTitleRule(Rule):
+    """个人名＋肩書き・不复合（2アクセント単位；NHK Ⅰ複合名詞 2））。
+
+    NHK 原文：「前部要素が『高橋，佐藤，清水』など，**個人名**の場合には，
+    複合しない（アクセント単位としては，２単位）」（タカ＼ハシ・メージ＼ン）。
+
+    判别：前部品詞に ``人名`` 包含（固有名詞-人名-姓/名 等）。前部・肩書き
+    各自保持词典调型，肩書き以 ``new_unit`` 开启第 2 単位。
+
+    注：本机词典对部分姓氏的品詞标注为 固有名詞-一般（无 人名 细分类），
+    此类前部的 2 単位化无法确定性判别，按复合路径处理（拍数规律）。
+    """
+
+    rule_id = "R-COMPOUND-NAME-TITLE"
+    name = "个人名＋肩書き・不复合（2単位）"
+    source_ref = "NHK Ⅰ複合名詞 2）（タカ＼ハシ・メージ＼ン）"
+    priority = 255                        # 先于复合词 C 规则（250）
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        if not _eligible_pair(morphs, i):
+            return False
+        front, rear = morphs[i], morphs[i + 1]
+        return "人名" in front.pos and rear.morph in TITLE_WORDS
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        front, rear = morphs[i], morphs[i + 1]
+        front_main, _ = parse_accent_value(front.accent_raw)
+        rear_main, _ = parse_accent_value(rear.accent_raw)
+        front.accent = front_main if front_main is not None else 0
+        rear.accent = rear_main if rear_main is not None else 0
+        rear.new_unit = True
+        rear.claimed = True
+        front.derived_by = rear.derived_by = self.rule_id
+        logic = (
+            f"前部「{front.morph}」为个人名（固有名詞-人名）→ 依 NHK Ⅰ 2）不复合："
+            f"2アクセント単位（前部「{front.morph}」・肩書き「{rear.morph}」各自保留调型）"
+        )
+        result = morphs.render_range(i, i) + "・" + morphs.render_range(i + 1, i + 1)
+        morphs.add_report(self, (i, i + 1), logic, result)

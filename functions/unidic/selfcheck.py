@@ -499,6 +499,41 @@ def check_conjugation_mod(config: dict, tagger) -> None:
           full_render("食べたら") == "タ＼ベタラ", full_render("食べたら"))
 
 
+# --------------------------------- 6.6d 个人名＋肩書き（NHK Ⅰ複合名詞 2））
+def check_name_title(config: dict, tagger) -> None:
+    _section("NHK Ⅰ 2）个人名＋肩書き（R-COMPOUND-NAME-TITLE 等）")
+
+    overrides = config.get("homograph_overrides", {})
+    rules = load_registry(config)
+
+    def full_render(text: str) -> str:
+        r = stage1_analyzer.analyze(text, tagger, overrides)
+        ctx = MorphList([MorphState.from_morph(m) for m in r.morphs])
+        resegment.resegment_unknowns(ctx, tagger, overrides)
+        run_engine(ctx, rules)
+        return ctx.render_units()
+
+    # 普通语素＋肩書き → 复合（1単位・後部一型；NHK 原文例的模式）
+    check("釣り名人 → ツリメ＼イジン（C2 後部一型；NHK ツリメ＼ージン 模式）",
+          full_render("釣り名人") == "ツリメ＼イジン", full_render("釣り名人"))
+    check("文学博士 → ブンガクハ＼カセ（NHK ブンガクハ＼クシ 模式）",
+          full_render("文学博士") == "ブンガクハ＼カセ", full_render("文学博士"))
+    # 词典整词（族名）：与 NHK 原文逐字一致
+    check("徳川氏 → トクガワ＼シ（NHK 原文例；词典整词）",
+          full_render("徳川氏") == "トクガワ＼シ", full_render("徳川氏"))
+
+    # 个人名（固有名詞-人名）＋肩書き → 不复合（2単位；合成数据验证规则本体）
+    from dataclasses import replace as _replace
+    parsed = stage1_analyzer.analyze("高橋博士", tagger, overrides).morphs
+    front = _replace(parsed[0], pos="名詞-固有名詞-人名-姓")
+    ctx = MorphList([MorphState.from_morph(front), MorphState.from_morph(parsed[1])])
+    run_engine(ctx, rules)
+    check("〔合成〕高橋(人名-姓)＋博士 → タカ＼ハシ・ハ＼カセ（NHK タカ＼ハシ・ハ＼クシ 模式）",
+          ctx.render_units() == "タカ＼ハシ・ハ＼カセ"
+          and any(x["rule_id"] == "R-COMPOUND-NAME-TITLE" for x in ctx.report),
+          ctx.render_units())
+
+
 # ------------------------------------------- 6.65 数詞＋助数詞2単位語（NHK Ⅱ）
 def check_numeral_two_unit(config: dict, tagger) -> None:
     _section("NHK Ⅱ 数詞＋助数詞・2単位語（15/14/19＋2拍以下助数詞）")
@@ -656,6 +691,7 @@ def main() -> int:
     check_adjective_connection(config, tagger)
     check_conjugation_mod(config, tagger)
     check_numeral_two_unit(config, tagger)
+    check_name_title(config, tagger)
     check_homograph_overrides(config, tagger)
     check_compound_flat_exceptions(config, tagger)
     check_sample_sentences(config)
