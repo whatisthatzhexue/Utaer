@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 import env_util
+import resegment
 import ruby_util
 import stage1_analyzer
 from stage2_rules import load_registry, run_engine
@@ -89,6 +90,9 @@ def run_pipeline_full(
         (MorphState.from_morph(m) for m in stage1_result.morphs),
         input_text=text,
     )
+    # 预处理：真未收录整词的确定性词典再切分（rules_config.json 的 resegment.enabled 开关）
+    if bool((config.get("resegment") or {}).get("enabled", True)):
+        resegment.resegment_unknowns(ctx, tagger, config.get("homograph_overrides", {}))
     rules = load_registry(config)
     run_engine(ctx, rules)
 

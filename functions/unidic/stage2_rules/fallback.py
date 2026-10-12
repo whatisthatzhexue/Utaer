@@ -60,6 +60,84 @@ class LexDictRule(Rule):
         morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
 
 
+def _is_kanji_char(ch: str) -> bool:
+    """单字符汉字判定（CJK 统一表意文字 + 扩展 A + 々〆）。"""
+    code = ord(ch)
+    return (0x4E00 <= code <= 0x9FFF) or (0x3400 <= code <= 0x4DBF) or ch in "々〆"
+
+
+class GoshuKango11Rule(Rule):
+    """語種倾向兜底：二字漢語(1+1) → 頭高型（NHK Ⅲ全般 1. a）。"""
+
+    rule_id = "R-FALLBACK-GOSHU-KANGO11"
+    name = "語種倾向兜底・二字漢語(1+1)・頭高型"
+    source_ref = "NHK Ⅲ全般 1. a（二字漢語(1+1)は頭高型）"
+    priority = 60
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        surface = morph.morph
+        return (
+            len(surface) == 2
+            and all(_is_kanji_char(ch) for ch in surface)
+            and morph.mora_count == 2
+        )
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        morph.accent = 1
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = (
+            f"「{morph.morph}」词典未收录（@ 且无 [] 标注）→ "
+            "按 NHK Ⅲ全般 1. a 語種倾向（二字漢語(1+1)は頭高型）取 调型=1（頭高型）"
+        )
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
+class GoshuGaira3Rule(Rule):
+    """語種倾向兜底：外来語 3 拍以下 → 頭高型；末拍特殊拍 → 中高（NHK Ⅲ全般 1. e）。"""
+
+    rule_id = "R-FALLBACK-GOSHU-GAIRAI3"
+    name = "語種倾向兜底・外来語3拍以下"
+    source_ref = "NHK Ⅲ全般 1. e（外来語3拍以下は頭高型；末拍特殊拍は中高）"
+    priority = 60
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        if morph.mora_count < 1 or morph.mora_count > 3:
+            return False
+        surface = morph.morph
+        return bool(surface) and all(
+            mora_util.is_katakana(ch) or ch == "ー" for ch in surface
+        )
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        moras = mora_util.split_moras(morph.pron)
+        if moras and len(moras) >= 3 and mora_util.is_special_mora(moras[-1]):
+            morph.accent = len(moras) - 1   # 末拍特殊拍 → 中高（[-2] 相当）
+            kind = f"中高型（末拍「{moras[-1]}」为特殊拍）"
+        else:
+            morph.accent = 1                # 頭高型
+            kind = "頭高型"
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = (
+            f"「{morph.morph}」词典未收录（@ 且无 [] 标注）→ "
+            f"按 NHK Ⅲ全般 1. e 語種倾向（外来語3拍以下は頭高型）取 调型={morph.accent}（{kind}）"
+        )
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
 class FallbackHeibanRule(Rule):
     """兜底：无任何调型来源时取默认平板型 0（NHK 語種倾向表的终档）。"""
 

@@ -72,9 +72,15 @@ __all__ = [
 
 
 def _collect_rules_from_module(module: Any) -> list[Rule]:
-    """实例化模块内定义的 :class:`Rule` 子类（仅收集本模块定义的类，跳过导入的基类）。"""
+    """实例化模块内定义的 :class:`Rule` 子类。
+
+    仅收集本模块定义的类（跳过导入的基类）；``_`` 前缀类视为私有基类（如
+    ``compound._CompoundBase``）不注册。
+    """
     rules: list[Rule] = []
     for name in dir(module):
+        if name.startswith("_"):
+            continue
         obj = getattr(module, name)
         if (
             inspect.isclass(obj)
@@ -150,10 +156,12 @@ def load_registry(config: dict | None = None) -> list[Rule]:
 
     rules: list[Rule] = []
     seen: set[str] = set()
+    known_ids: set[str] = set()   # 全部候选规则 id（含被 overrides 禁用的），用于未知 id 告警判定
     for rule in candidates:
         if not rule.rule_id:
             logger.warning("规则 %s 缺少 rule_id，已跳过", type(rule).__name__)
             continue
+        known_ids.add(rule.rule_id)
         override = overrides.get(rule.rule_id, {})
         if isinstance(override, dict):
             if override.get("enabled") is False:
@@ -175,7 +183,7 @@ def load_registry(config: dict | None = None) -> list[Rule]:
         rules.append(rule)
 
     for rule_id in overrides:
-        if rule_id not in seen:
+        if rule_id not in known_ids:
             logger.warning("rule_overrides 引用了不存在的规则：%s", rule_id)
 
     rules.sort(key=lambda r: (-r.priority, r.rule_id))
