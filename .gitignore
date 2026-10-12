@@ -1,3 +1,9 @@
+# .gitignore for unidic
+functions/unidic/NHK/
+functions/unidic/.venv/
+functions/unidic/mecab-unidic-neologd/
+functions/unidic/tdmelodic/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
