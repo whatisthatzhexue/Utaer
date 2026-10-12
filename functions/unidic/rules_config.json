@@ -1,0 +1,10 @@
+{
+  "rule_overrides": {},
+  "custom_rules_dir": "stage2_rules/custom",
+  "homograph_overrides": {
+    "米": {"reading": "コメ", "pron": "コメ", "accent_raw": "2"},
+    "盛る": {"accent_raw": "0"}
+  },
+  "resegment": {"enabled": true},
+  "nucleus_legality": {"avoid_devoiced": false}
+}

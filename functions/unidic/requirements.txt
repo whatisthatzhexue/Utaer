@@ -1,0 +1,4 @@
+# unidic_and_f0 模块 —— 双阶段声调分析管线依赖
+# 阶段一（stage1_analyzer.py）使用宿主 mecab-python3 + 组合词典 $(mecab-config --dicdir)/tdmelodic
+# 安装：pip install -r requirements.txt（详见《本项目配置教程.md》3.2）
+mecab-python3>=1.0.6
