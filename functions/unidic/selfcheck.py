@@ -487,8 +487,8 @@ def check_conjugation_mod(config: dict, tagger) -> None:
     # たかっ/たけれ（词典 M2@2；NHK 4.1 〜タ＼カッタ/〜タ＼ケレバ）
     check("食べたかった → タベタ＼カッタ（NHK 4.1 〜タ＼カッタ）",
           full_render("食べたかった") == "タベタ＼カッタ", full_render("食べたかった"))
-    check("食べたければ → タベタケ＼レバ",
-          full_render("食べたければ") == "タベタケ＼レバ", full_render("食べたければ"))
+    check("食べたければ → タベタ＼ケレバ（NHK 4.1 〜タ＼ケレバ）",
+          full_render("食べたければ") == "タベタ＼ケレバ", full_render("食べたければ"))
     # 命令形（NHK 一览表：タベ＼ロ、ノ＼メ、コ＼イ）
     check("食べろ → タベ＼ロ（NHK 一览表原文）", full_render("食べろ") == "タベ＼ロ", full_render("食べろ"))
     check("飲め → ノ＼メ", full_render("飲め") == "ノ＼メ", full_render("飲め"))
