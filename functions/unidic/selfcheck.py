@@ -323,6 +323,43 @@ def check_particles_m4(config: dict) -> None:
           not any(r["rule_id"] == "R-PART-NO-ODAKA" for r in report["matched_rules"]))
 
 
+# ------------------------------------------- 6.6 句级样例回归（test_sentences.txt）
+def check_sample_sentences(config: dict) -> None:
+    _section("句级测试样例回归（test_sentences.txt）")
+
+    def full_render(text: str) -> str:
+        _, report = pipeline.run_pipeline(text, config=config)
+        assert report is not None
+        multi = [r for r in report["matched_rules"] if r["rule_id"] == "R-MULTI-UNIT"]
+        return multi[0]["result"] if multi else ""
+
+    # 已验证完全正确的句子（逐字固定为回归基线）
+    check("学生が本を読む。→ ガクセイガ━・ホ＼ンオ・ヨ＼ム",
+          full_render("学生が本を読む。") == "ガクセイガ━・ホ＼ンオ・ヨ＼ム",
+          full_render("学生が本を読む。"))
+    check("私は学生です。→ ワタクシワ━・ガクセイデ＼ス（F2@1 です）",
+          full_render("私は学生です。") == "ワタクシワ━・ガクセイデ＼ス",
+          full_render("私は学生です。"))
+
+    # 名词部已验证正确；动词尾部（ます/た 接続＝NHK Ⅲ-2 范围）为已知待改进项，
+    # 这里仅固定前半部分防止回归（尾部的当前行为见 docs/验证报告）。
+    check("図書館で本を読みます。→ 名词部 トショ＼カンデ・ホ＼ンオ",
+          full_render("図書館で本を読みます。").startswith("トショ＼カンデ・ホ＼ンオ"),
+          full_render("図書館で本を読みます。"))
+    check("住民税を払います。→ 名词部 ジューミ＼ンゼイオ",
+          full_render("住民税を払います。").startswith("ジューミ＼ンゼイオ"),
+          full_render("住民税を払います。"))
+    check("東京駅まで歩きます。→ トーキョ＼ーエキ・マ＼デ（まで F2@1 第2単位）",
+          full_render("東京駅まで歩きます。").startswith("トーキョ＼ーエキ・マ＼デ"),
+          full_render("東京駅まで歩きます。"))
+    check("昨日は雨が降りました。→ 名词部 キノ＼ーワ・ア＼メガ",
+          full_render("昨日は雨が降りました。").startswith("キノ＼ーワ・ア＼メガ"),
+          full_render("昨日は雨が降りました。"))
+    check("買い物に行きます。→ カイモノニ━（に F1）",
+          full_render("買い物に行きます。").startswith("カイモノニ━"),
+          full_render("買い物に行きます。"))
+
+
 # ------------------------------------------------------------- 7. 注册表与配置
 def check_registry(config: dict) -> None:
     _section("注册表（教程 4.3）：优先级 / rule_overrides / custom_rules_dir")
@@ -394,6 +431,7 @@ def main() -> int:
     check_invariants(config)
     check_fallback(config)
     check_particles_m4(config)
+    check_sample_sentences(config)
     check_registry(config)
     check_artifacts(config)
 
