@@ -316,6 +316,16 @@ def check_particles_m4(config: dict) -> None:
           bool(no_odaka) and no_odaka[0]["result"] == "コメノ━",
           json.dumps(no_odaka, ensure_ascii=False))
 
+    # 中高型＋末拍特殊拍/二重母音副音 → 平板化（NHK 2.1 倾向首列形，W5）
+    check("日本の → ニホンノ━（NHK 2.1 原文例）",
+          last_result("日本の") == "ニホンノ━", last_result("日本の"))
+    check("きのうの → キノーノ━（NHK 2.1 原文例）",
+          last_result("きのうの") == "キノーノ━", last_result("きのうの"))
+    check("おとといの → オトトイノ━（NHK 2.1 原文例）",
+          last_result("おとといの") == "オトトイノ━", last_result("おとといの"))
+    check("ミソの → ミ＼ソノ（頭高保持：付属語不干渉原则）",
+          last_result("ミソの") == "ミ＼ソノ", last_result("ミソの"))
+
     # 「の」例外：数詞保留（イチ 尾高でも平板化しない条件检查——数值上应保留前部核）
     accent, report = pipeline.run_pipeline("一の", config=config)
     assert report is not None

@@ -350,7 +350,12 @@ class PartKifukuRule(Rule):
 
 
 class PartNoOdakaRule(Rule):
-    """「の」接尾高型名词 → 整体平板化（NHK Ⅲ-1 2.1 例外）。
+    """「の」接续的平板化例外（NHK Ⅲ-1 2.1）。
+
+    - **尾高型** ＋ の → 整体平板化（コメ＼＋ノ → コメノ━）；
+    - **中高型且末拍为特殊拍（二重母音副音含む）** ＋ の → 平板化倾向
+      （キノ＼ー＋ノ → キノーノ━、オトト＼イ＋ノ → オトトイノ━、
+      ニホ＼ン＋ノ → ニホンノ━——NHK 2.1 所列倾向，本引擎取该首列形）。
 
     除外：数詞（日時・回数等，``数詞`` 出现在品詞中）与顺序词/无声化致尾高的
     词表（``NO_ODAKA_EXCEPTION_WORDS``——NHK 列举为部分枚举，后续可扩充）。
@@ -358,7 +363,7 @@ class PartNoOdakaRule(Rule):
 
     rule_id = "R-PART-NO-ODAKA"
     name = "「の」接尾高型・平板化例外"
-    source_ref = "NHK Ⅲ-1 2.1（尾高型＋の → 平板型）"
+    source_ref = "NHK Ⅲ-1 2.1（尾高型/中高特定末拍＋の → 平板型）"
     priority = 210
     phase = RulePhase.DERIVATION
 
@@ -369,8 +374,21 @@ class PartNoOdakaRule(Rule):
         if mora_util.strip_brackets(morph.pron) != "ノ":
             return False
         prev = morphs[i - 1]
-        if prev.accent != prev.mora_count or prev.mora_count <= 0:
-            return False                      # 仅尾高型（核位于末拍之后）
+        if prev.accent is None or prev.mora_count <= 0:
+            return False
+        moras = mora_util.split_moras(prev.pron)
+        if not moras:
+            return False
+
+        is_odaka = prev.accent == prev.mora_count                       # 尾高型
+        last_index = len(moras) - 1
+        last_specialish = (
+            mora_util.is_special_mora(moras[last_index])
+            or mora_util.is_diphthong_glide(moras, last_index)          # 二重母音副音
+        )
+        is_mid_high_special = (0 < prev.accent < prev.mora_count) and last_specialish
+        if not (is_odaka or is_mid_high_special):
+            return False
         if "数詞" in prev.pos:
             return False                      # 数詞（日時・回数等）保留
         if prev.morph in NO_ODAKA_EXCEPTION_WORDS:
@@ -379,11 +397,12 @@ class PartNoOdakaRule(Rule):
 
     def apply(self, morphs: MorphList, i: int) -> None:
         front, morph = morphs[i - 1], morphs[i]
+        kind = "尾高型" if front.accent == front.mora_count else "中高型（末拍为特殊拍/二重母音副音）"
         front.accent = 0
         morph.accent = 0
         front.derived_by = morph.derived_by = self.rule_id
         logic = (
-            f"前部「{front.morph}」为尾高型，「の」接续时例外的に名词部分下がり目消失 → "
+            f"前部「{front.morph}」为{kind}，「の」接续时名词部分下がり目消失 → "
             "整体平板化（NHK Ⅲ-1 2.1）"
         )
         morphs.add_report(self, (i - 1, i), logic, morphs.render_range(i - 1, i))
