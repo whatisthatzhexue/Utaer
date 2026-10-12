@@ -411,6 +411,50 @@ def check_sample_sentences(config: dict) -> None:
           full_render("住民税を払います。"))
 
 
+# ------------------------------------------- 6.6b 形容词接付属語（NHK Ⅲ-3）
+def check_adjective_connection(config: dict, tagger) -> None:
+    _section("NHK Ⅲ-3 形容词接付属語（表12 形容詞%F + ない/なる）")
+
+    overrides = config.get("homograph_overrides", {})
+    rules = load_registry(config)
+
+    def full_render(text: str) -> str:
+        r = stage1_analyzer.analyze(text, tagger, overrides)
+        ctx = MorphList([MorphState.from_morph(m) for m in r.morphs])
+        resegment.resegment_unknowns(ctx, tagger, overrides)
+        run_engine(ctx, rules)
+        return ctx.render_units()
+
+    # です（F2@-1；NHK 1.1b アマ＼イデス 首列）
+    check("甘いです → アマ＼イデス（NHK 1.1b 首列）",
+          full_render("甘いです") == "アマ＼イデス", full_render("甘いです"))
+    check("うまいです → ウマ＼イデス（起伏：そのまま連なる）",
+          full_render("うまいです") == "ウマ＼イデス", full_render("うまいです"))
+    check("高いです → タカ＼イデス", full_render("高いです") == "タカ＼イデス", full_render("高いです"))
+
+    # が/から/と（F2@-1：1拍前移形，NHK 并记列）
+    check("甘いが → アマ＼イガ", full_render("甘いが") == "アマ＼イガ", full_render("甘いが"))
+    check("甘いから → アマ＼イカラ", full_render("甘いから") == "アマ＼イカラ", full_render("甘いから"))
+
+    # 活用形（形容詞%F4@-2；NHK 一览表原文例）
+    check("甘かった → アマ＼カッタ（NHK 原文例）",
+          full_render("甘かった") == "アマ＼カッタ", full_render("甘かった"))
+    check("冷たかった → ツメタ＼カッタ（NHK 原文例）",
+          full_render("冷たかった") == "ツメタ＼カッタ", full_render("冷たかった"))
+    check("おいしかった → オイシ＼カッタ（NHK 首列例）",
+          full_render("おいしかった") == "オイシ＼カッタ", full_render("おいしかった"))
+    check("楽しかった → タノシ＼カッタ", full_render("楽しかった") == "タノシ＼カッタ", full_render("楽しかった"))
+    check("甘くて → アマ＼クテ（NHK 原文例）",
+          full_render("甘くて") == "アマ＼クテ", full_render("甘くて"))
+
+    # ない/なる（KIFUKU 兜底；NHK 1.2 アマクナ＼イ；起伏 2 単位）
+    check("甘くない → アマクナ＼イ（NHK 1.2）",
+          full_render("甘くない") == "アマクナ＼イ", full_render("甘くない"))
+    check("高くない → タカ＼ク・ナ＼イ（起伏：2 単位）",
+          full_render("高くない") == "タカ＼ク・ナ＼イ", full_render("高くない"))
+    check("甘くなる → アマクナ＼ル", full_render("甘くなる") == "アマクナ＼ル", full_render("甘くなる"))
+
+
 # ------------------------------------- 6.75 同形語修正表（日本=ニホン 等）
 def check_homograph_overrides(config: dict, tagger) -> None:
     _section("同形語修正表（日本→ニホン 全词族；用户指定「所有日本=にほん」）")
@@ -531,6 +575,7 @@ def main() -> int:
     check_fallback(config)
     check_particles_m4(config)
     check_verb_connection(config, tagger)
+    check_adjective_connection(config, tagger)
     check_homograph_overrides(config, tagger)
     check_compound_flat_exceptions(config, tagger)
     check_sample_sentences(config)

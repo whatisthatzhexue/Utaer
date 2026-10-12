@@ -22,6 +22,7 @@ import logging
 
 import mora_util
 from stage2_rules.base import MorphList, Rule, RulePhase, Unit
+from stage2_rules.particles import KIFUKU_FALLBACK
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,14 @@ def compute_units(morphs: MorphList) -> list[Unit]:
                             and mora_util.strip_brackets(prev.pron) in ("テ", "デ")
                         )
                     )
+                )
+                # 非自立の ない/なる（形容词接续，NHK Ⅲ-3 1.2）并入前部単位：
+                # 如 アマクナ＼イ；起伏式第 2 単位由 new_unit 排除（高くない → タカ＼ク・ナ＼イ）；
+                # 主用言用法（買い物に+行き）不并入
+                or (
+                    "非自立" in morph.pos
+                    and morph.pos_head in ("形容詞", "動詞")
+                    and mora_util.strip_brackets(morph.pron) in KIFUKU_FALLBACK
                 )
             )
         )

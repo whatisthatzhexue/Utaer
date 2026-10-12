@@ -39,8 +39,11 @@
 - ``R-PART-NO-ODAKA``：「の」接尾高型平板化（NHK Ⅲ-1 2.1 例外）；
 - ``R-PART-DECIDING``：付属語決定型（F4 / NHK Ⅲ-2 4.1・Ⅲ-1 2.2）。
 
-范围说明：前部支持**名词/代名词（NHK Ⅲ-1）与动词（NHK Ⅲ-2）**；
-形容词（NHK Ⅲ-3）留待后续里程碑（``形容詞%`` 数据已就绪）。
+范围说明：前部支持**名词/代名词（NHK Ⅲ-1）、动词（NHK Ⅲ-2）与形容词（NHK Ⅲ-3）**；
+形状詞（ナ形容词，如 きれいです）尚未纳入（数据仅含 名詞%/動詞%/形容詞% 三类规格）。
+NHK Ⅲ-3 的活用形接续由同一 F 机制精确复现（实测：甘かっ+た 的 ``形容詞%F4@-2``
+→ アマ＼カッタ、冷たかっ→ツメタ＼カッタ、甘く+て 的 ``F2@-1`` → アマ＼クテ，
+均与 NHK 一览表一致）；ない/なる（非自立）按 NHK Ⅲ-3 1.2 走 KIFUKU 兜底表。
 """
 
 from __future__ import annotations
@@ -65,7 +68,7 @@ FLAT_PARTICLES_MULTI: frozenset[str] = frozenset({
     "カラ", "ダケ", "ッテ", "トシテ", "ホド",
 })
 
-#: 起伏式付属語（NHK Ⅲ-1 1.2；值=付属語自身核位置）——无 F 数据时的兜底
+#: 起伏式付属語（NHK Ⅲ-1 1.2 / Ⅲ-3 1.2；值=付属語自身核位置）——无 F 数据时的兜底
 KIFUKU_FALLBACK: dict[str, int] = {
     "カモ": 1, "コソ": 1, "サエ": 1, "シカ": 1, "スラ": 1,
     "ダッタ": 1, "ダッテ": 1, "ダト": 1, "ダロー": 2,
@@ -75,6 +78,8 @@ KIFUKU_FALLBACK: dict[str, int] = {
     "ナラ": 1, "ナラバ": 1, "ナンカ": 1, "ナンテ": 1,
     "ニワ": 1, "ニモ": 1, "ノミ": 1, "バカリ": 1, "エワ": 1, "エモ": 1,
     "マデ": 1, "ミタイダ": 1, "ヨリ": 1,
+    # NHK Ⅲ-3 1.2（形容词接续）：ない（アマクナ＼イ）・なる（アマクナ＼ル）
+    "ナイ": 1, "ナル": 1,
 }
 
 #: 付属語決定型（NHK Ⅲ-1 2.2；值=付属語自身核位置）——无 F 数据时的兜底
@@ -97,10 +102,11 @@ _FRONT_POS_PREFIX: dict[str, str] = {
     "名詞": "名詞%",
     "代名詞": "名詞%",   # 代名詞 使用 名詞% 规格
     "動詞": "動詞%",
+    "形容詞": "形容詞%",  # i-形容词（NHK Ⅲ-3）
 }
 
-#: F 系列规则适用的前部品詞（NHK Ⅲ-1 名词/代名词 + Ⅲ-2 动词；形容词 Ⅲ-3 后续）
-F_RULE_FRONT_POS: frozenset[str] = frozenset({"名詞", "代名詞", "動詞"})
+#: F 系列规则适用的前部品詞（NHK Ⅲ-1 名词/代名词 + Ⅲ-2 动词 + Ⅲ-3 形容词）
+F_RULE_FRONT_POS: frozenset[str] = frozenset({"名詞", "代名詞", "動詞", "形容詞"})
 
 #: 名词性前部（R-PART-NO-ODAKA 等 NHK Ⅲ-1 专属规则）
 NOMINAL_FRONT_POS: frozenset[str] = frozenset({"名詞", "代名詞"})
@@ -157,6 +163,21 @@ def _place_total(front: MorphState, morph: MorphState, total: int) -> None:
         morph.accent = total - n1
 
 
+def _is_auxiliary_like(morph: MorphState) -> bool:
+    """付属語或须按付属語处理的自立語形判定。
+
+    - 助詞・助動詞 → True；
+    - 非自立の ない/なる（NHK Ⅲ-3 1.2 的 形容词接续对象，pos 为
+      形容詞/動詞-非自立可能）→ 仅当其发音在 ``KIFUKU_FALLBACK`` 表内时 True
+      （避免把 ある/いる 等其它非自立词卷入 F 规则）。
+    """
+    if morph.pos_head in ("助詞", "助動詞"):
+        return True
+    if "非自立" in morph.pos and morph.pos_head in ("形容詞", "動詞"):
+        return mora_util.strip_brackets(morph.pron) in KIFUKU_FALLBACK
+    return False
+
+
 def _eligible(morphs: MorphList, i: int, front_pos_heads: frozenset[str]) -> bool:
     """付属語规则的公共前置条件：前部（指定品詞）已推导、本形态素未推导未占用。"""
     if i <= 0:
@@ -164,7 +185,7 @@ def _eligible(morphs: MorphList, i: int, front_pos_heads: frozenset[str]) -> boo
     morph = morphs[i]
     if morph.accent is not None or morph.claimed:
         return False
-    if morph.pos_head not in ("助詞", "助動詞"):
+    if not _is_auxiliary_like(morph):
         return False
     prev = morphs[i - 1]
     if prev.accent is None or prev.pos_head not in front_pos_heads:
