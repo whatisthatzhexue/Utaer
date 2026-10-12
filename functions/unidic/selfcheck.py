@@ -323,7 +323,47 @@ def check_particles_m4(config: dict) -> None:
           not any(r["rule_id"] == "R-PART-NO-ODAKA" for r in report["matched_rules"]))
 
 
-# ------------------------------------------- 6.6 句级样例回归（test_sentences.txt）
+# ------------------------------------------- 6.6 动词接付属語（NHK Ⅲ-2 / 表12 F@動詞）
+def check_verb_connection(config: dict, tagger) -> None:
+    _section("NHK Ⅲ-2 动词接付属語（表12 動詞%F 规格 + た/て 家族 + サ変并入）")
+
+    overrides = config.get("homograph_overrides", {})
+    rules = load_registry(config)
+
+    def full_render(text: str) -> str:
+        r = stage1_analyzer.analyze(text, tagger, overrides)
+        ctx = MorphList([MorphState.from_morph(m) for m in r.morphs])
+        resegment.resegment_unknowns(ctx, tagger, overrides)
+        run_engine(ctx, rules)
+        return ctx.render_units()
+
+    # —— た形・て形家族（NHK Ⅲ-2 1.1a/1.2a；用户确认 + 活用形一覧表）——
+    check("食べた → タ＼ベタ（一段 核前移1拍）", full_render("食べた") == "タ＼ベタ", full_render("食べた"))
+    check("食べて → タ＼ベテ（一段）", full_render("食べて") == "タ＼ベテ", full_render("食べて"))
+    check("食べたら → タ＼ベタラ（NHK 1.2a 原文例）", full_render("食べたら") == "タ＼ベタラ", full_render("食べたら"))
+    check("来た → キ＼タ（カ変）", full_render("来た") == "キ＼タ", full_render("来た"))
+    check("太った → フト＼ッタ（五段保持；太る=2调）", full_render("太った") == "フト＼ッタ", full_render("太った"))
+    check("飲んだ → ノ＼ンダ（五段保持）", full_render("飲んだ") == "ノ＼ンダ", full_render("飲んだ"))
+    check("飲んだら → ノ＼ンダラ（NHK 1.2a 原文例）", full_render("飲んだら") == "ノ＼ンダラ", full_render("飲んだら"))
+    check("咲いた → サイタ━（平板动词保持）", full_render("咲いた") == "サイタ━", full_render("咲いた"))
+
+    # —— ます（F4 動詞%F4@1；NHK 4.1 付属語決定型）——
+    check("歩きます → アルキマ＼ス", full_render("歩きます") == "アルキマ＼ス", full_render("歩きます"))
+    check("読みます → ヨミマ＼ス", full_render("読みます") == "ヨミマ＼ス", full_render("読みます"))
+    check("食べました → タベマ＼シタ（NHK 4.1 〜マ＼シタ）",
+          full_render("食べました") == "タベマ＼シタ", full_render("食べました"))
+
+    # —— が（F2@0：平板动词插入 / 起伏动词直接連続；NHK Ⅲ-2 1.1b）——
+    check("働くが → ハタラク＼ガ（平板动词 下がり目挿入型＝N1+0，モル＼ガ 型）",
+          full_render("働くが") == "ハタラク＼ガ", full_render("働くが"))
+    check("飲むが → ノ＼ムガ（起伏动词 直接連続）", full_render("飲むが") == "ノ＼ムガ", full_render("飲むが"))
+
+    # —— サ変（名詞＋し）単位并入 ——
+    check("勉強します → ベンキョーシマ＼ス（单一単位）",
+          full_render("勉強します") == "ベンキョーシマ＼ス", full_render("勉強します"))
+
+
+# ------------------------------------------- 6.7 句级样例回归（test_sentences.txt）
 def check_sample_sentences(config: dict) -> None:
     _section("句级测试样例回归（test_sentences.txt）")
 
@@ -333,31 +373,39 @@ def check_sample_sentences(config: dict) -> None:
         multi = [r for r in report["matched_rules"] if r["rule_id"] == "R-MULTI-UNIT"]
         return multi[0]["result"] if multi else ""
 
-    # 已验证完全正确的句子（逐字固定为回归基线）
-    check("学生が本を読む。→ ガクセイガ━・ホ＼ンオ・ヨ＼ム",
-          full_render("学生が本を読む。") == "ガクセイガ━・ホ＼ンオ・ヨ＼ム",
-          full_render("学生が本を読む。"))
     check("私は学生です。→ ワタクシワ━・ガクセイデ＼ス（F2@1 です）",
           full_render("私は学生です。") == "ワタクシワ━・ガクセイデ＼ス",
           full_render("私は学生です。"))
-
-    # 名词部已验证正确；动词尾部（ます/た 接続＝NHK Ⅲ-2 范围）为已知待改进项，
-    # 这里仅固定前半部分防止回归（尾部的当前行为见 docs/验证报告）。
-    check("図書館で本を読みます。→ 名词部 トショ＼カンデ・ホ＼ンオ",
-          full_render("図書館で本を読みます。").startswith("トショ＼カンデ・ホ＼ンオ"),
-          full_render("図書館で本を読みます。"))
-    check("住民税を払います。→ 名词部 ジューミ＼ンゼイオ",
-          full_render("住民税を払います。").startswith("ジューミ＼ンゼイオ"),
-          full_render("住民税を払います。"))
-    check("東京駅まで歩きます。→ トーキョ＼ーエキ・マ＼デ（まで F2@1 第2単位）",
-          full_render("東京駅まで歩きます。").startswith("トーキョ＼ーエキ・マ＼デ"),
+    check("東京駅まで歩きます。→ トーキョ＼ーエキ・マ＼デ・アルキマ＼ス",
+          full_render("東京駅まで歩きます。") == "トーキョ＼ーエキ・マ＼デ・アルキマ＼ス",
           full_render("東京駅まで歩きます。"))
-    check("昨日は雨が降りました。→ 名词部 キノ＼ーワ・ア＼メガ",
-          full_render("昨日は雨が降りました。").startswith("キノ＼ーワ・ア＼メガ"),
-          full_render("昨日は雨が降りました。"))
-    check("買い物に行きます。→ カイモノニ━（に F1）",
-          full_render("買い物に行きます。").startswith("カイモノニ━"),
+    check("桜の花が咲きました。→ サクラノ＼ハナガ・サキマ＼シタ",
+          full_render("桜の花が咲きました。") == "サクラノ＼ハナガ・サキマ＼シタ",
+          full_render("桜の花が咲きました。"))
+    check("図書館で本を読みます。→ トショ＼カンデ・ホ＼ンオ・ヨミマ＼ス",
+          full_render("図書館で本を読みます。") == "トショ＼カンデ・ホ＼ンオ・ヨミマ＼ス",
+          full_render("図書館で本を読みます。"))
+    check("空気がきれいです。→ ク＼ーキガ・キ＼レーデス（形状詞+です：范围外，现状固定）",
+          full_render("空気がきれいです。") == "ク＼ーキガ・キ＼レーデス",
+          full_render("空気がきれいです。"))
+    check("コーヒーを飲みます。→ コーヒ＼ーオ・ノミマ＼ス（コーヒー=3调）",
+          full_render("コーヒーを飲みます。") == "コーヒ＼ーオ・ノミマ＼ス",
+          full_render("コーヒーを飲みます。"))
+    check("学生が本を読む。→ ガクセイガ━・ホ＼ンオ・ヨ＼ム",
+          full_render("学生が本を読む。") == "ガクセイガ━・ホ＼ンオ・ヨ＼ム",
+          full_render("学生が本を読む。"))
+    check("お米を食べました。→ オコメ＼オ・タベマ＼シタ",
+          full_render("お米を食べました。") == "オコメ＼オ・タベマ＼シタ",
+          full_render("お米を食べました。"))
+    check("買い物に行きます。→ カイモノニ━・イキマ＼ス",
+          full_render("買い物に行きます。") == "カイモノニ━・イキマ＼ス",
           full_render("買い物に行きます。"))
+    check("昨日は雨が降りました。→ キノ＼ーワ・ア＼メガ・フリマ＼シタ",
+          full_render("昨日は雨が降りました。") == "キノ＼ーワ・ア＼メガ・フリマ＼シタ",
+          full_render("昨日は雨が降りました。"))
+    check("住民税を払います。→ ジューミ＼ンゼイオ・ハライマ＼ス",
+          full_render("住民税を払います。") == "ジューミ＼ンゼイオ・ハライマ＼ス",
+          full_render("住民税を払います。"))
 
 
 # ------------------------------------------------------------- 7. 注册表与配置
@@ -431,6 +479,7 @@ def main() -> int:
     check_invariants(config)
     check_fallback(config)
     check_particles_m4(config)
+    check_verb_connection(config, tagger)
     check_sample_sentences(config)
     check_registry(config)
     check_artifacts(config)

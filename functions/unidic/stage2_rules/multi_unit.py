@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 
+import mora_util
 from stage2_rules.base import MorphList, Rule, RulePhase, Unit
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,20 @@ def compute_units(morphs: MorphList) -> list[Unit]:
                 or morph.is_symbol          # 标点等记号并入前单位
                 or prev.join_next           # 复合词/接辞合并标记
                 or prev.pos_head == "接頭辞"  # 接头辞与其后续词同单位
+                # サ変・补助动词（動詞-非自立可能）并入前部単位：
+                # 名詞＋し/する（勉強+し）或 て/で＋补助動詞（食べて+いる）；
+                # 主用言用法（買い物に+行き 等）不并入
+                or (
+                    morph.pos_head == "動詞"
+                    and "非自立" in morph.pos
+                    and (
+                        prev.pos_head == "名詞"
+                        or (
+                            prev.pos_head == "助詞"
+                            and mora_util.strip_brackets(prev.pron) in ("テ", "デ")
+                        )
+                    )
+                )
             )
         )
         if not attach:

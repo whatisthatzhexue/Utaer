@@ -1,18 +1,21 @@
-"""付属語接続规则（资料二 UniDic 表12 F 系列 ＋ 资料三 NHK Ⅲ-1 名词接付属語）。
+"""付属語接続规则（资料二 UniDic 表12 F 系列 ＋ 资料三 NHK Ⅲ-1/Ⅲ-2）。
 
 依据（四合一，已逐项核对）：
 
-- **资料三 NHK Ⅲ-1 总原则『付属語不干渉』**：绝大多数付属語不影响前接名词的声调；
+- **资料三 NHK Ⅲ-1 总原则『付属語不干渉』**（名词）/ **NHK Ⅲ-2**（动词）：
+  绝大多数付属語不影响前接词部分的声调；
 - **资料二 UniDic 手册 6.3–6.7 表12「アクセント結合型分類（助詞・助動詞）」**
   ——付属語的词典原生字段 ``a_con_type`` 携带**按前部品詞区分的 F 系列规格**
-  （实测：を=``…名詞%F1``、の=``名詞%F1``、まで=``名詞%F2@1``、ぐらい=``名詞%F4@1``、
-  らしい=``名詞%F4@2``），按公式计算文節アクセント型::
+  （实测：を=``名詞%F1``、まで=``名詞%F2@1``、ぐらい=``名詞%F4@1``、
+  が=``動詞%F2@0,名詞%F1``、ます=``動詞%F4@1``、た=``動詞%F2@1``），
+  按前部品詞选中条目后按公式计算文節アクセント型::
 
       F1      → M1（前部要素のアクセント型保持＝付属語不干渉）
-      F2@M    → 前部 0 型: N1 + M；それ以外: M1（M1 时付属語核作为第 2 単位存活，
-                与 NHK Ⅲ-1 1.2b/c「形容词部分の核も生きる」一致）
+      F2@M    → 前部 0 型: N1 + M；それ以外: M1
+                （M≥1 时付属語核作为第 2 単位存活＝NHK Ⅲ-2 1.2a / Ⅲ-1 1.2b；
+                 M=0 时无第 2 下降＝直接連続＝NHK Ⅲ-2 1.1b「そのまま連なる」）
       F3@M    → 前部 0 型: M1；それ以外: N1 + M
-      F4@M    → N1 + M（付属語決定型；NHK Ⅲ-1 2.2 ぐらい・らしい の原生实现）
+      F4@M    → N1 + M（付属語決定型；NHK Ⅲ-2 4.1 ます・Ⅲ-1 2.2 ぐらい 的原生实现）
       F5      → 0
       F6@M, L → 前部 0 型: N1 + M；それ以外: N1 + L
       N1: 前部要素のモーラ数, M1: 前部要素のアクセント型, M/M,L: 付属語の核位置参数
@@ -20,18 +23,24 @@
 - **资料三 NHK Ⅲ-1 例外 2.1**：「の」接尾高型名词 → 名词核消失、整体平板化
   （コメ＼＋ノ → コメノ━；数詞（日時・回数等）与无声化致尾高的词除外）——
   由 ``R-PART-NO-ODAKA``（优先级高于 F1 默认）实现；
-- 付属語无 F 数据时（如 ほど=空、`[]` 解码词）回落 NHK Ⅲ-1 的手工表中转
+- **资料三 NHK Ⅲ-2 た形・て形家族**（た・だ・て・で・たら・だら・たり・だり，
+  1.1a/1.2a ＋ 活用形一覧表）：平板动词保持；五段（起伏）核保持；
+  一段・カ変・サ変核前移 1 拍（食べた タ＼ベタ、食べたら タ＼ベタラ、来た キ＼タ；
+  供する キョ＼ーシ 由核合法性级联处理）——由 ``R-PART-TA-TE`` 实现
+  （词典 F2@1 数据与 NHK 活用形表冲突时，以资料三 NHK 表为准）；
+- 付属語无 F 数据时（如 ほど=空、`[]` 解码词、`に` 无動詞%条目）回落手工表
   （平板式表 / 起伏式表 / 决定型表），逻辑与 F 系列同构。
 
 规则清单：
 
 - ``R-PART-FLAT``：平板式付属語・基本接続（F1 / NHK 表兜底；验收样例 1 依据）；
 - ``R-PART-KIFUKU``：起伏式付属語（F2/F3/F5/F6 / NHK 表兜底；前部核与付属語核并存）；
+- ``R-PART-TA-TE``：た形・て形接続（NHK Ⅲ-2；一段/カ変/サ変核前移）；
 - ``R-PART-NO-ODAKA``：「の」接尾高型平板化（NHK Ⅲ-1 2.1 例外）；
-- ``R-PART-DECIDING``：付属語決定型（F4 / NHK 2.2；名词核消失、付属語核生效）。
+- ``R-PART-DECIDING``：付属語決定型（F4 / NHK Ⅲ-2 4.1・Ⅲ-1 2.2）。
 
-范围说明：本模块按 MVP 深度限定**名词性前部**（NHK Ⅲ-1）；动词/形容词接付属語
-（NHK Ⅲ-2/Ⅲ-3，词典 ``動詞%F…``/``形容詞%F…`` 数据已就绪）留待后续里程碑扩展。
+范围说明：前部支持**名词/代名词（NHK Ⅲ-1）与动词（NHK Ⅲ-2）**；
+形容词（NHK Ⅲ-3）留待后续里程碑（``形容詞%`` 数据已就绪）。
 """
 
 from __future__ import annotations
@@ -73,18 +82,41 @@ DECIDING_FALLBACK: dict[str, int] = {
     "グライ": 1, "クライ": 1, "ラシイ": 2,
 }
 
+#: た形・て形家族（NHK Ⅲ-2 1.1a/1.2a；按発音匹配）
+TA_TE_SHORT: frozenset[str] = frozenset({"タ", "ダ", "テ", "デ"})
+TA_TE_TARA: frozenset[str] = frozenset({"タラ", "ダラ", "タリ", "ダリ"})
+
 #: 「の」平板化例外的词表（NHK Ⅲ-1 2.1：顺序词等；数詞另按 pos 判定）
 NO_ODAKA_EXCEPTION_WORDS: frozenset[str] = frozenset({
     "次", "よそ", "基地", "地下", "ヒ素", "一日",
 })
 
 
-def _parse_noun_f(a_con_type: str) -> tuple[str, list[int]] | None:
-    """从 ``a_con_type``（如 ``"動詞%F2@0,名詞%F1"``）解析「名詞」项的 F 规格。
+#: 前部品詞 → F 规格前缀（表12 按品詞区分；未列出的品詞不适用 F 规则）
+_FRONT_POS_PREFIX: dict[str, str] = {
+    "名詞": "名詞%",
+    "代名詞": "名詞%",   # 代名詞 使用 名詞% 规格
+    "動詞": "動詞%",
+}
 
-    返回 ``(F 型名, 参数列表)``；无「名詞%」项或格式异常时返回 None。
+#: F 系列规则适用的前部品詞（NHK Ⅲ-1 名词/代名词 + Ⅲ-2 动词；形容词 Ⅲ-3 后续）
+F_RULE_FRONT_POS: frozenset[str] = frozenset({"名詞", "代名詞", "動詞"})
+
+#: 名词性前部（R-PART-NO-ODAKA 等 NHK Ⅲ-1 专属规则）
+NOMINAL_FRONT_POS: frozenset[str] = frozenset({"名詞", "代名詞"})
+
+
+def _parse_f_spec(a_con_type: str, front_pos_head: str) -> tuple[str, list[int]] | None:
+    """按**前部品詞**从 ``a_con_type`` 解析 F 规格（表12 按品詞区分条目）。
+
+    例：``"動詞%F2@0,名詞%F1"`` 在前部为动词时返回 ``("F2", [0])``、
+    为名词时返回 ``("F1", [])``。前部品詞无对应前缀条目或格式异常时返回 None
+    （调用方回落手工表或跳过，即「付属語不干渉」的保持行为）。
     ``F6@M, L`` 的双参数以续接数字项合并（``F6@1`` + ``2`` → ``F6@1,2``）。
     """
+    prefix = _FRONT_POS_PREFIX.get(front_pos_head)
+    if prefix is None:
+        return None
     items: list[str] = []
     for raw in a_con_type.split(","):
         item = raw.strip()
@@ -95,8 +127,8 @@ def _parse_noun_f(a_con_type: str) -> tuple[str, list[int]] | None:
         else:
             items.append(item)
     for item in items:
-        if item.startswith("名詞%"):
-            spec = item[len("名詞%"):]
+        if item.startswith(prefix):
+            spec = item[len(prefix):]
             f_type, _, params = spec.partition("@")
             numbers = [
                 int(p) for p in params.split(",") if p.strip().lstrip("-").isdigit()
@@ -125,8 +157,8 @@ def _place_total(front: MorphState, morph: MorphState, total: int) -> None:
         morph.accent = total - n1
 
 
-def _eligible(morphs: MorphList, i: int) -> bool:
-    """付属語规则的公共前置条件：名词性前部已推导、本形态素未推导未占用。"""
+def _eligible(morphs: MorphList, i: int, front_pos_heads: frozenset[str]) -> bool:
+    """付属語规则的公共前置条件：前部（指定品詞）已推导、本形态素未推导未占用。"""
     if i <= 0:
         return False
     morph = morphs[i]
@@ -135,7 +167,7 @@ def _eligible(morphs: MorphList, i: int) -> bool:
     if morph.pos_head not in ("助詞", "助動詞"):
         return False
     prev = morphs[i - 1]
-    if prev.accent is None or not prev.is_nominal:
+    if prev.accent is None or prev.pos_head not in front_pos_heads:
         return False
     return True
 
@@ -164,10 +196,10 @@ class PartFlatRule(Rule):
     phase = RulePhase.DERIVATION
 
     def match(self, morphs: MorphList, i: int) -> bool:
-        if not _eligible(morphs, i):
+        if not _eligible(morphs, i, F_RULE_FRONT_POS):
             return False
         morph = morphs[i]
-        f_spec = _parse_noun_f(morph.a_con_type)
+        f_spec = _parse_f_spec(morph.a_con_type, morphs[i - 1].pos_head)
         if f_spec is not None:
             return f_spec[0] == F1        # 词典 F 数据：F1 = 付属語不干渉
         pron = mora_util.strip_brackets(morph.pron)
@@ -200,10 +232,10 @@ class PartKifukuRule(Rule):
     phase = RulePhase.DERIVATION
 
     def match(self, morphs: MorphList, i: int) -> bool:
-        if not _eligible(morphs, i):
+        if not _eligible(morphs, i, F_RULE_FRONT_POS):
             return False
         morph = morphs[i]
-        f_spec = _parse_noun_f(morph.a_con_type)
+        f_spec = _parse_f_spec(morph.a_con_type, morphs[i - 1].pos_head)
         if f_spec is not None:
             return f_spec[0] in (F2, F3, F5, F6)
         return mora_util.strip_brackets(morph.pron) in KIFUKU_FALLBACK
@@ -211,7 +243,7 @@ class PartKifukuRule(Rule):
     def apply(self, morphs: MorphList, i: int) -> None:
         front, morph = morphs[i - 1], morphs[i]
         n1 = front.mora_count
-        f_spec = _parse_noun_f(morph.a_con_type)
+        f_spec = _parse_f_spec(morph.a_con_type, front.pos_head)
 
         if f_spec is None:
             # NHK Ⅲ-1 1.2 兜底：付属語自身核位置来自手工表
@@ -243,12 +275,20 @@ class PartKifukuRule(Rule):
                     f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
                     f"前部为 0 型：文節型 = N1 + M（{n1} + {m1_param}），付属語内に核"
                 )
-            else:
+            elif m1_param >= 1:
                 morph.accent = m1_param
                 morph.new_unit = True
                 logic = (
                     f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
-                    "前部起伏：文節型 = M1（前部核保持），付属語核作为第 2 アクセント単位（NHK Ⅲ-1 1.2 b）"
+                    "前部起伏：文節型 = M1（前部核保持），付属語核作为第 2 アクセント単位"
+                    "（NHK Ⅲ-1 1.2 b／Ⅲ-2 1.2a）"
+                )
+            else:
+                # M=0：付属語无自身核 → 前部にそのまま連なる（NHK Ⅲ-2 1.1b 直接連続）
+                morph.accent = 0
+                logic = (
+                    f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
+                    "前部起伏且 M=0：付属語无自身下降核，前部にそのまま連なる（NHK Ⅲ-2 1.1b）"
                 )
         elif f_type == F3:
             if front.accent == 0:
@@ -302,7 +342,7 @@ class PartNoOdakaRule(Rule):
     phase = RulePhase.DERIVATION
 
     def match(self, morphs: MorphList, i: int) -> bool:
-        if not _eligible(morphs, i):
+        if not _eligible(morphs, i, NOMINAL_FRONT_POS):
             return False
         morph = morphs[i]
         if mora_util.strip_brackets(morph.pron) != "ノ":
@@ -341,10 +381,10 @@ class PartDecidingRule(Rule):
     phase = RulePhase.DERIVATION
 
     def match(self, morphs: MorphList, i: int) -> bool:
-        if not _eligible(morphs, i):
+        if not _eligible(morphs, i, F_RULE_FRONT_POS):
             return False
         morph = morphs[i]
-        f_spec = _parse_noun_f(morph.a_con_type)
+        f_spec = _parse_f_spec(morph.a_con_type, morphs[i - 1].pos_head)
         if f_spec is not None:
             return f_spec[0] == F4
         return mora_util.strip_brackets(morph.pron) in DECIDING_FALLBACK
@@ -352,7 +392,7 @@ class PartDecidingRule(Rule):
     def apply(self, morphs: MorphList, i: int) -> None:
         front, morph = morphs[i - 1], morphs[i]
         n1 = front.mora_count
-        f_spec = _parse_noun_f(morph.a_con_type)
+        f_spec = _parse_f_spec(morph.a_con_type, front.pos_head)
         if f_spec is not None:
             particle_accent = (f_spec[1] or [1])[0]
             source = f"资料二 表12 F4@{particle_accent}"
@@ -365,4 +405,74 @@ class PartDecidingRule(Rule):
             f"「{morph.morph}」为付属語決定型（{source}）→ 名词部分核消失，"
             f"文節型 = N1 + M（{n1} + {particle_accent}），付属語核生效"
         )
+        morphs.add_report(self, (i - 1, i), logic, morphs.render_range(i - 1, i))
+
+
+class PartTaTeRule(Rule):
+    """た形・て形（含 たら・たり 系）接续（NHK Ⅲ-2 1.1a/1.2a ＋ 活用形一覧表）。
+
+    规则（前部=動詞）：
+
+    - **平板动词**：た/だ/て/で → 直接連続保持平板（モッタ━）；
+      たら/だら/たり/だり → 付属語内に下がり目を挿入（モッタ＼ラ）；
+    - **五段（起伏）动词**：动词核保持、付属語直接連続（ノ＼ンダ，ノ＼ンダラ）；
+    - **一段・カ変・サ変动词**：核**前移 1 拍**（食べた タ＼ベタ、食べて タ＼ベテ、
+      食べたら タ＼ベタラ、来た キ＼タ；供する キョ＼ーシ 的音位由 R-NUCLEUS-SPECIAL
+      级联处理）——NHK 活用形一覧表「中止法」列（食べる→``タ＼ベ``）与用户确认。
+
+    冲突说明：词典 ``た`` 的 F 数据（``動詞%F2@1``）对平板动词/一段动词给出与 NHK
+    活用形表不同的结果；本规则（资料三 NHK）优先级 205 高于通用 F 规则，按 NHK 表实现。
+    """
+
+    rule_id = "R-PART-TA-TE"
+    name = "た形・て形接続（一段・カ変・サ変 核前移）"
+    source_ref = "NHK Ⅲ-2 1.1a/1.2a（活用形一覧表 食べる→タ＼ベ）"
+    priority = 205
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        if i <= 0:
+            return False
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed:
+            return False
+        if morph.pos_head not in ("助詞", "助動詞"):
+            return False
+        pron = mora_util.strip_brackets(morph.pron)
+        if pron not in TA_TE_SHORT and pron not in TA_TE_TARA:
+            return False
+        front = morphs[i - 1]
+        return front.accent is not None and front.pos_head == "動詞"
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        front, morph = morphs[i - 1], morphs[i]
+        pron = mora_util.strip_brackets(morph.pron)
+        base = front.accent or 0
+        shifted_class = ("一段" in front.conj_type) or ("変格" in front.conj_type)
+
+        if base == 0:
+            if pron in TA_TE_TARA:
+                _place_total(front, morph, front.mora_count + 1)
+                logic = (
+                    "前部为平板动词 → たら/たり 接続时于付属語内插入下降核"
+                    "（モッタ＼ラ；NHK Ⅲ-2 1.2a）"
+                )
+            else:
+                morph.accent = 0
+                logic = "前部为平板动词 → た/て 直接連続，保持平板（モッタ━；NHK Ⅲ-2 1.1a）"
+        elif shifted_class:
+            before = base
+            front.accent = max(1, base - 1)
+            morph.accent = 0
+            logic = (
+                f"前部为一段/カ変/サ変活用（{front.conj_type or '活用型未知'}）→ "
+                f"核前移1拍（调型 {before}→{front.accent}；NHK Ⅲ-2 活用形一覧表）"
+            )
+        else:
+            morph.accent = 0
+            logic = (
+                "前部为五段（起伏）动词 → 动词核保持，付属語直接連続"
+                "（ノ＼ンダ；NHK Ⅲ-2 1.1a）"
+            )
+        front.derived_by = morph.derived_by = self.rule_id
         morphs.add_report(self, (i - 1, i), logic, morphs.render_range(i - 1, i))
