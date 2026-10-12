@@ -270,5 +270,5 @@ def describe_accent(accent: int | None, mora_count_value: int) -> str:
     if accent is None:
         return "调型未知"
     if accent <= 0:
-        return "调型=0（平板型，无下降核）"
+        return "调型=0（平板型）"
     return f"调型={accent}（{accent_type_name(accent, mora_count_value)}，核在第{accent}拍）"

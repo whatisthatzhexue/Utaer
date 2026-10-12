@@ -222,3 +222,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# 开发期分析产物（init.py 运行生成，不入库）
+fast-api/audio/
