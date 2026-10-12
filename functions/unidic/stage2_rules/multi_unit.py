@@ -77,6 +77,60 @@ def compute_units(morphs: MorphList) -> list[Unit]:
     return units
 
 
+class NumTwoUnitRule(Rule):
+    """数詞＋助数詞の2単位語（NHK Ⅱ 1. 2）②）。
+
+    NHK Ⅱ 明文：「15」（一部「14（ジューヨ）」「19（ジューク）」も）に **2拍以下の
+    助数詞** が付く場合は中点「・」でアクセント単位を区切り2単位語とする
+    （例：ジュ＼ー・ゴネン━，1単位形 ジュ＼ーゴネン 并记）。
+
+    本规则覆盖 MeCab 拆分为 ``[十][四|五|九][助数詞]`` 的形态：
+    第 1 単位 = 十（頭高 ジュ＼ー）；第 2 単位 = 一の位＋助数詞（平板 ゴネン━）。
+    该拆分的连续性由 ``new_unit``/``join_next`` 标记交给 R-MULTI-UNIT 渲染。
+
+    范围说明：「21〜99（10の倍数除く）」的2単位形因仓库内无 NHK Ⅱ 助数詞一覧表
+    数据（无法确定切分位置）暂未实现。
+    """
+
+    rule_id = "R-NUM-TWO-UNIT"
+    name = "数詞＋助数詞・2単位語（15/14/19）"
+    source_ref = "NHK Ⅱ 1. 2）②（2単位語：ジュ＼ー・ゴネン━）"
+    priority = 260                       # 先于复合词 C 规则（250）处理数词链
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        if i + 2 >= len(morphs):
+            return False
+        ten, unit_digit, counter = morphs[i], morphs[i + 1], morphs[i + 2]
+        if ten.claimed or unit_digit.claimed or counter.claimed:
+            return False
+        if ten.accent is not None or unit_digit.accent is not None or counter.accent is not None:
+            return False
+        if ten.morph != "十" or unit_digit.morph not in ("四", "五", "九"):
+            return False
+        if ten.pos_head != "名詞" or unit_digit.pos_head != "名詞":
+            return False
+        if counter.mora_count <= 0 or counter.mora_count > 2:   # 2拍以下の助数詞
+            return False
+        return "助数詞" in counter.pos or counter.pos_head == "接尾辞"
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        ten, unit_digit, counter = morphs[i], morphs[i + 1], morphs[i + 2]
+        ten.accent = 1                    # ジュ＼ー（頭高）
+        unit_digit.accent = 0             # 第2単位（一の位＋助数詞，平板）
+        unit_digit.new_unit = True
+        unit_digit.join_next = True
+        counter.accent = 0
+        counter.claimed = True
+        ten.derived_by = unit_digit.derived_by = counter.derived_by = self.rule_id
+        logic = (
+            f"数詞「十{unit_digit.morph}」（NHK Ⅱ 2単位語：15/14/19＋2拍以下助数詞）→ "
+            f"中点分隔：第1単位 十（頭高）・第2単位 「{unit_digit.morph}{counter.morph}」（平板）"
+        )
+        result = morphs.render_range(i, i) + "・" + morphs.render_range(i + 1, i + 2)
+        morphs.add_report(self, (i, i + 2), logic, result)
+
+
 class MultiUnitRule(Rule):
     """複数単位（句级）：切分アクセント単位并渲染整句（每单位至多一个核）。"""
 

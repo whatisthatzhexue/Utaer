@@ -465,6 +465,40 @@ def check_adjective_connection(config: dict, tagger) -> None:
     check("甘くなる → アマクナ＼ル", full_render("甘くなる") == "アマクナ＼ル", full_render("甘くなる"))
 
 
+# ------------------------------------------- 6.65 数詞＋助数詞2単位語（NHK Ⅱ）
+def check_numeral_two_unit(config: dict, tagger) -> None:
+    _section("NHK Ⅱ 数詞＋助数詞・2単位語（15/14/19＋2拍以下助数詞）")
+
+    overrides = config.get("homograph_overrides", {})
+    rules = load_registry(config)
+
+    def full_render(text: str) -> str:
+        r = stage1_analyzer.analyze(text, tagger, overrides)
+        ctx = MorphList([MorphState.from_morph(m) for m in r.morphs])
+        resegment.resegment_unknowns(ctx, tagger, overrides)
+        run_engine(ctx, rules)
+        return ctx.render_units()
+
+    check("十五本 → ジュ＼ー・ゴポン━（NHK Ⅱ 2単位语模式）",
+          full_render("十五本") == "ジュ＼ー・ゴポン━", full_render("十五本"))
+    check("十五日 → ジュ＼ー・ゴニチ━", full_render("十五日") == "ジュ＼ー・ゴニチ━", full_render("十五日"))
+    check("十四日 → ジュ＼ー・ヨンニチ━（14 同型）",
+          full_render("十四日") == "ジュ＼ー・ヨンニチ━", full_render("十四日"))
+    check("十九人 → ジュ＼ー・キューニン━（19 同型）",
+          full_render("十九人") == "ジュ＼ー・キューニン━", full_render("十九人"))
+    check("十五本を読みます。→ ジュ＼ー・ゴポンオ━・ヨミマ＼ス（句级集成）",
+          full_render("十五本を読みます。") == "ジュ＼ー・ゴポンオ━・ヨミマ＼ス",
+          full_render("十五本を読みます。"))
+
+    # 非 15/14/19 的数词链不得命中该规则（走复合词路径）
+    r = stage1_analyzer.analyze("十二本", tagger, overrides)
+    ctx = MorphList([MorphState.from_morph(m) for m in r.morphs])
+    run_engine(ctx, rules)
+    check("十二本：不触发 R-NUM-TWO-UNIT（走复合词 C 规则路径）",
+          not any(x["rule_id"] == "R-NUM-TWO-UNIT" for x in ctx.report),
+          json.dumps([x["rule_id"] for x in ctx.report], ensure_ascii=False))
+
+
 # ------------------------------------- 6.75 同形語修正表（日本=ニホン 等）
 def check_homograph_overrides(config: dict, tagger) -> None:
     _section("同形語修正表（日本→ニホン 全词族；用户指定「所有日本=にほん」）")
@@ -586,6 +620,7 @@ def main() -> int:
     check_particles_m4(config)
     check_verb_connection(config, tagger)
     check_adjective_connection(config, tagger)
+    check_numeral_two_unit(config, tagger)
     check_homograph_overrides(config, tagger)
     check_compound_flat_exceptions(config, tagger)
     check_sample_sentences(config)
