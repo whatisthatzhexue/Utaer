@@ -20,7 +20,7 @@
 |---|---|
 | 组合词典调用（3.1） | 宿主已安装组合词典 `$(mecab-config --dicdir)/tdmelodic`（配置教程 3.16） |
 | 声调预测（3.3） | 已构建镜像 `tdmelodic:latest`（配置教程 3.8） |
-| HTTP 调用（3.4） | 已启动 tdmelodic_service 容器（见启动教程） |
+| HTTP 调用（3.4） | 已退出分析链路（仅作工具参考；见 3.4 说明） |
 | Python 绑定调用（3.5） | 宿主已安装 mecab-python3（见本项目配置教程） |
 
 ### 2.2 术语约定
@@ -106,7 +106,9 @@ echo 御御御付け,おみおつけ | docker run -i --rm tdmelodic:latest tdmel
 
 ### 3.4 HTTP 服务调用（基于 td_service.py）
 
-先按 `本项目 unidic_and_f0 部分启动教程.md` 启动 tdmelodic_service 容器，然后：
+> **注意**：本项目已采用双阶段声调分析（阶段一离线查表 + 阶段二规则引擎），并**禁止调型推测**——本节的 HTTP 服务内部调用 `tdmelodic-s2ya`，已**退出分析链路**（见 `AGENT.md` 3.1），本节仅作工具用法参考保留。分析流程请见 `本项目 unidic_and_f0 部分启动教程.md`。
+
+若仅作实验参考，可手动启动容器后：
 
 ```bash
 curl -X POST http://localhost:8000 \
@@ -197,7 +199,7 @@ print(tagger.parse(text))
 | `tdmelodic-s2ya: command not found` 或镜像不存在 | 镜像未构建 | 完成配置教程 3.8 |
 | 词典调用与预测结果不一致 | 前者来自大词典收录词条，后者由模型推断 | 属正常差异；项目侧未收录词需在 notes 标注「词典未收录」（总 AGENTS.md §9） |
 | アクセント列为 `@` | 该词词典未收录、声调由推断补充 | 正常现象，见 3.2 |
-| HTTP 连接被拒 | tdmelodic_service 容器未启动 | 见启动教程步骤 3 |
+| HTTP 连接被拒 | tdmelodic_service 容器未启动 | 本教程 3.4（注意：该服务已退出分析链路，仅作参考） |
 
 ## 附录：参考链接
 
