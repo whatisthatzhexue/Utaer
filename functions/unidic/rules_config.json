@@ -22,7 +22,17 @@
   },
   "resegment": {"enabled": true},
   "nucleus_legality": {"avoid_devoiced": false},
-  "compound": {"nhk_flat_exceptions_priority": true},
+  "compound": {
+    "nhk_flat_exceptions_priority": true,
+    "head_type_elements": {
+      "主義": {"kana": "シュギ", "moras": 2},
+      "価値": {"kana": "カチ", "moras": 2},
+      "都市": {"kana": "トシ", "moras": 2}
+    }
+  },
+  "lexical": {
+    "phrase_overrides": {"しょうがない": {"しょう": 0}}
+  },
   "numeral": {"enabled": true},
   "compound_verb": {"enabled": true},
   "no_compound": {"enabled": true}

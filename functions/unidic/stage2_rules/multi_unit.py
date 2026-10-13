@@ -41,6 +41,11 @@ def compute_units(morphs: MorphList) -> list[Unit]:
         prev = morphs[i - 1]
         attach = (
             not morph.new_unit               # 强制新単位标记优先（起伏式付属語第 2 単位等）
+            # 文末記号（句点類）＝ 文境界：アクセント単位は文をまたがないため、
+            # 句点の直後は必ず新単位を開く（用例对照：〜あります。でも → アリマ＼ス・デ＼モ）。
+            # 句点自身は前単位へ并入（判定は「前が句点か」でのみ行うため、
+            # 句点の次に来る付属語が前単位へ吸われない）。読点「、」は文境界ではない。
+            and not prev.is_sentence_end
             and (
                 morph.is_particle_like      # 付属語紧跟前部（NHK Ⅲ-1 付属語不干渉）
                 # 标点等无读音记号并入前单位；有读音的记号形（如（笑）→ワライ）独立成単位

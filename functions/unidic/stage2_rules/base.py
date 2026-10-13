@@ -54,6 +54,10 @@ def parse_accent_value(accent_raw: str) -> tuple[int | None, list[int]]:
     return numbers[0], numbers[1:]
 
 
+#: 文末記号（句点類）——文境界の表層形による判定（pos に ``句点`` を含むものと併用）
+SENTENCE_END_SYMBOLS: frozenset[str] = frozenset({"。", "．", "！", "？", "!", "?"})
+
+
 @dataclass
 class Unit:
     """アクセント単位（韵律单位）：一组连续形态素，至多一个下降核（NHK Ⅲ全般 4.）。"""
@@ -142,6 +146,17 @@ class MorphState:
     def is_symbol(self) -> bool:
         """记号类（补助记号/记号/空白）判定。"""
         return self.pos_head in ("補助記号", "記号", "空白")
+
+    @property
+    def is_sentence_end(self) -> bool:
+        """文末记号（句点类）判定——**文境界**：其后形态素开启新アクセント単位。
+
+        アクセント単位は文をまたがない（NHK Ⅲ全般 4.）。読点「、」は文境界では
+        ないため対象外（单位切分仍按付属語/复合规则）。记事号自身仍并入前单位。
+        """
+        if not self.is_symbol:
+            return False
+        return self.morph in SENTENCE_END_SYMBOLS or "句点" in self.pos
 
     @property
     def is_nominal(self) -> bool:

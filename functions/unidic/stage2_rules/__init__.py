@@ -51,6 +51,7 @@ BUILTIN_RULE_MODULES: tuple[str, ...] = (
     "compound",
     "conjugation",
     "particles",
+    "lexical",
     "nucleus_legality",
     "multi_unit",
     "fallback",

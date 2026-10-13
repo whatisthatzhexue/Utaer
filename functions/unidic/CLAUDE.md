@@ -5,7 +5,8 @@
 > 项目全貌与架构、音调推导规则汇总、踩坑指南、测试与验证规范。
 > **【第二部分】模块协作准则** —— 原 `AGENT.md` 契约全文（保留，项目规范唯一权威）。
 >
-> 最近更新：2026-10-13（新增 No.1–4 参照例句全量对齐、数词读法子系统、の-复合结合律等）。
+> 最近更新：2026-10-13（新增句5–7 全量对齐：らしい 品詞二分为替、後部一型要素表、
+> 語彙用法規則 `lexical.py`、文末記号＝文境界 等）。
 
 ---
 
@@ -43,6 +44,7 @@
 | `numeral.py` | 预处理②：阿拉伯数字链＋助数詞 → 合成形态素 | `merge_numerals(ctx)`；规则 `R-NUM-READING` |
 | `compound_verb.py` | 预处理③：複合動詞首位规则（多调型動詞 token 裁定） | `apply_compound_verb_rule(...)`；规则 `R-CONJ-COMPOUND-VERB` |
 | `no_compound.py` | 预处理④：の-复合名词结合律（双平板→整体平板） | `apply_no_compound_rule(...)`；规则 `R-COMPOUND-NO` |
+| `stage2_rules/lexical.py` | **語彙用法規則**（句5–7 帰納）：惯用句表・形式名詞とき・方式用法通り・何の読み分け・接続詞でも | 规则 `R-LEX-PHRASE/TOKI/TOORI/NANI/DEMO` |
 | `selfcheck.py` | 全量回归自检（200+ 项：纯函数/参照例句逐字钉死/配置机制/不变量） | `python3 selfcheck.py`（全绿 = 健康） |
 | `rules_config.json` | 修正表与开关（见 §1.4） | — |
 | `stage2_rules/` | 规则引擎包（见 §1.3） | `from stage2_rules import registry/load_registry/run_engine` |
@@ -53,17 +55,26 @@
 | 模块 | 规则 | 说明 |
 |---|---|---|
 | `base.py` | — | `Rule` 基类（`match(morphs,i)/apply/morphs/priority/phase/source_ref/config_section`）、`MorphState`（工作状态：accent/claimed/join_next/new_unit/unit_id/notes…）、`MorphList`（即规则上下文：`add_report/render_range/render_units`）、`parse_accent_value` |
-| `__init__.py` | 注册表 | 六模块自动收集 → `rule_overrides`（改优先级/禁用）→ `custom_rules_dir` 动态加载 → 稳定排序；`run_engine` 三遍执行（推导→**校验→整句**） |
-| `compound.py` | `R-COMPOUND-C1…C5`、`R-COMPOUND-NAME-TITLE` | 表10 结合型公式（查 `a_con_type`；无字段按 NHK 拍数规律：1–2拍前部末型/平板例外表，3–4拍→後部一型/保存，**≥5拍不合并**）；数詞/含数字前部不黏合普通名词；人名＋肩書き 2単位 |
+| `__init__.py` | 注册表 | 七模块自动收集 → `rule_overrides`（改优先级/禁用）→ `custom_rules_dir` 动态加载 → 稳定排序；`run_engine` 三遍执行（推导→**校验→整句**） |
+| `compound.py` | `R-COMPOUND-C1…C5`、`R-COMPOUND-NAME-TITLE`、`R-COMPOUND-HEAD-TYPE` | 表10 结合型公式（查 `a_con_type`；无字段按 NHK 拍数规律：1–2拍前部末型/平板例外表，3–4拍→後部一型/保存，**≥5拍不合并**）；数詞/含数字前部不黏合普通名词；人名＋肩書き 2単位；**後部一型要素表**（〜主義/価値/都市：表記＋读音双匹配，`accent=拍数−後部拍数+1`）；**結合式接尾辞らしい 不走 C 规则**（让位 `R-PART-RASHII`） |
 | `conjugation.py` | `R-CONJ-MOD` | 表9 アクセント修飾型（词典 `a_mod_type`：M1@M=N0−M；M2/M4 前部置平＋公式）＋命令形（min(base, N0−1)）；**たら/だら 让位 R-PART-TA-TE** |
-| `particles.py` | `R-PART-FLAT/KIFUKU/DECIDING/NO-ODAKA/TA-TE` | 表12 F 系列（按前部品詞选 `名詞%/動詞%/形容詞%`，含形状詞→名詞%、助動詞→動詞%）：F1=保持；F2 M≥1→第2単位（です/でし/助動詞前部除外）；F3 尾高→保持否则N1+M；F4=決定型（前部置平）；F5/F6 按表。た/て 家族（一段/カ変/サ変 核前移1拍）；の（尾高或中高+特殊拍末→平板）；**終助詞不参与** |
+| `particles.py` | `R-PART-FLAT/KIFUKU/DECIDING/NO-ODAKA/TA-TE`、`R-PART-RASHII` | 表12 F 系列（按前部品詞选 `名詞%/動詞%/形容詞%`，含形状詞→名詞%、助動詞→動詞%）：F1=保持；F2 M≥1→第2単位（です/でし/助動詞前部除外）；F3 尾高→保持否则N1+M；F4=決定型（前部置平）；F5/F6 按表。た/て 家族（一段/カ変/サ変 核前移1拍）；の（尾高或中高+特殊拍末→平板）；**終助詞不参与**；らしい（**校验遍**；前件平板/尾高→らし＼い、核在语中→核保持）见下 |
+| `lexical.py` | `R-LEX-PHRASE`/`TOKI`/`TOORI`/`NANI`/`DEMO` | 語彙用法規則（句5–7 帰納）：惯用句表（しょうがない→しょう[0]）；形式名詞とき（用言連体形接续→1调）；方式用法通り（動詞連体形接续→1调）；何の読み分け（＋が/を/も/は/へ/か（副助詞）→ナニ，**＋に/と/の/だ/です/助数詞→ナン**）；接続詞でも（文頭・句点直後の で＋も→デ＼モ） |
 | `nucleus_legality.py` | `R-NUCLEUS-SPECIAL` | 校验遍：核不可落 ン/ッ/ー/副音（**動詞末尾 ー 豁免**：ユー＼）；可循环前移 |
-| `multi_unit.py` | `R-MULTI-UNIT`、`R-NUM-TWO-UNIT`、`R-UNIT-JOIN` | 单位切分（付属語/记号并入、首调型前缀独立、サ変·补助动词并入规则）；15/14/19 数词 2単位；そういう 等定型复合 |
+| `multi_unit.py` | `R-MULTI-UNIT`、`R-NUM-TWO-UNIT`、`R-UNIT-JOIN` | 单位切分（付属語/记号并入、首调型前缀独立、サ変·补助动词并入规则）；**文末記号（。！？）＝文境界**：句点直后必开新単位（読点「、」不在此列）；15/14/19 数词 2単位；そういう 等定型复合 |
 | `fallback.py` | `R-LEX-DICT`、`R-FALLBACK-GOSHU-*`、`R-FALLBACK-SASA`、`R-FALLBACK-HEIBAN` | 词典直取（含括号解码）；語種倾向表分条（漢語/外来語/動詞/形容詞）；〜さ名词化→平板；默认平板＋notes「词典未收录」 |
 
-**优先级链（默认）**：校验1000 > 活用形280 > NUM-TWO-UNIT 260 > NAME-TITLE 255 >
-复合词250 > UNIT-JOIN 220 > NO-ODAKA 210 > TA-TE 205 > 付属語(F系)200 > 多単位150 >
-LEX-DICT 100 > SASA 65 > GOSHU 60 > HEIBAN 50。
+**优先级链（默认）**：校验 R-NUCLEUS-SPECIAL 1000 > R-PART-RASHII 265（校验遍）＞
+活用形280 > LEX-PHRASE 245 > NUM-TWO-UNIT 260 > NAME-TITLE 255 > 复合词250 >
+HEAD-TYPE 240 > LEX-TOKI/TOORI/NANI 235 > UNIT-JOIN 220 > LEX-DEMO 215 > NO-ODAKA 210 >
+TA-TE 205 > 付属語(F系)200 > 多単位150 > LEX-DICT 100 > SASA 65 > GOSHU 60 > HEIBAN 50。
+
+> **校验遍承载的不只是核合法性**：`R-PART-RASHII`（接尾辞らしい）为 `phase=VALIDATION`——
+> 它必须读**前件定稿核位**（含 `R-COMPOUND-HEAD-TYPE` 修正与核合法性移位之后），
+> 故不能放在推导遍。校验遍规则的两条硬约束：① `match` **不得**因 `accent is not None`
+> 而回避（要能覆盖推导遍已写入的值），② 必须自带**重入保护**（本工程用
+> `derived_by == rule_id`），否则 `run_engine` 的 `while` 循环空转至 guard=16。
+> 覆盖会留下推导遍的旧报告条目，本规则另追加一条（与 C3→核移位 的「两步报告」同例）。
 
 ### 1.4 配置体系（`rules_config.json`）
 
@@ -74,6 +85,8 @@ LEX-DICT 100 > SASA 65 > GOSHU 60 > HEIBAN 50。
 | `custom_rules_dir` | 自定义规则目录（默认 `stage2_rules/custom`） |
 | `resegment / numeral / compound_verb / no_compound` | 各预处理开关（`{"enabled": true}`） |
 | `compound.nhk_flat_exceptions_priority` | NHK 平板例外表（語/化/間/顔/級/金/性/製/的）优先于词典 C 值 |
+| `compound.head_type_elements` | **後部一型要素表**（NHK Ⅰ ②）：`{"主義": {"kana":"シュギ","moras":2}, …}`；末部命中时 `accent=拍数−後部拍数+1` |
+| `lexical.phrase_overrides` | **慣用句表**：`{"しょうがない": {"しょう": 0}}`；命中时只改写表内形态素，其余走既有规则 |
 | `nucleus_legality.avoid_devoiced` | 无声化拍核回避（默认 false，NHK 现代倾向「核不动」） |
 
 ### 1.5 对外接口（服务化）
@@ -116,6 +129,29 @@ text = show_accent(data)            # 直观 NHK 音调标注文本（＼核・�
 - **複合動詞首位規則（用户完备规则）**：多调型動詞按「最前動詞」定值——首位平板→複合動詞中高[-2]；
   首位非平板→複合動詞平板（思い込む：思い[2]→平板）。
 - **名词化「〜さ」兜底**：未收录 → 平板 0（多为0调）。
+- **らしい 的品詞二分为替（MeCab 天然两类，勿混）**：
+  `米/酒/みそ/雨/子供 + らしい` → **助動詞**（`a_con_type` 带 `名詞%F4@2`）→ 走
+  `R-PART-DECIDING`（F4 決定型）→ コメラシ＼ー；
+  `完璧主義/人間/学生/プロ/言葉 + らしい` → **接尾辞-形容詞的**（`accent_raw`=2・`C1`）→
+  走 `R-PART-RASHII`（校验遍）。
+  **判定轴是「核是否在语中」，不是「是否 0 调」**（用户指摘，2026-10-13 更正）：
+  **平板型（核なし）と尾高型（核が最終拍）都会直结 `らし＼い`**——两者在
+  语中都没有下がり目，故接尾辞的核得以成立（ニンゲンラシ＼ー、コトバラシ＼ー）；
+  只有**起伏式且核在语中**（頭高・中高）才走「前件核保持、らしい 不下降」
+  （カンペキシュ＼ギラシー、ジ＼ジツラシー、プ＼ロラシー）。
+  接尾辞らしい 已从 `compound.py` 的 C 系列后部要素路径**排除**（`NON_COMPOUND_REAR`）。
+- **後部一型要素表（〜主義 等）**：词典把「完璧主義」整体收录为推断值（発音字段
+  `カ[ンペキ]シュギ` → 核 4），而 NHK Ⅰ ② 以后部要素定调（〜主義＝後部一型）→
+  核 5（カンペキシュ＼ギ）。判定须**表記＋读音双匹配**——只按读音会撞同音和語
+  （今年 コトシ 末尾 トシ ≡ 〜都市）。
+- **文末記号＝文境界**：`。！？` 的直后必开新アクセント単位（句点自身仍并入前单位），
+  故 `〜あります。でも` → アリマ＼ス・デ＼モ。読点「、」**不**断句。
+- **語彙用法会改写词典值**（`lexical.py`）：とき（形式名詞）/通り（方式用法）随前接
+  用言連体形而变调，「何」随後接助詞而变读——**ナニ**（＋が/を/も/は/へ/か（副助詞）：
+  なにか）／**ナン**（＋に/と/の/だ/です/助数詞。なんにしますか・なんと言う。
+  用户指摘 2026-10-13）。文末の疑問「か」は MeCab が **助詞-終助詞** と标注するため
+  既存の終助詞排除に掛かり ナン のまま（`これは何か？`→ナンカ）——
+  这些是**用法规则**而非词典映射，勿写进 `homograph_overrides`（后者只按表層形、与上下文无关）。
 
 ### 2.3 助词「ノ」前后词汇的结合规则（专节）
 
@@ -173,8 +209,10 @@ text = show_accent(data)            # 直观 NHK 音调标注文本（＼核・�
 2. **差异归类**（决定修改层级）：
    - 分词/合并问题 → 预处理（resegment/numeral/compound_verb/no_compound）或复合/単位规则；
    - 词典值/表记问题 → `homograph_overrides`（最小、可追）；
+   - **用法依赖问题**（同一词条因前接活用形/後接助詞/文位置而变调变读）→ `stage2_rules/lexical.py`
+     ＋ `rules_config.json` 的 `lexical` 节（**不要**塞进 `homograph_overrides`：那是无上下文的表層形覆盖）；
    - 规则公式问题 → 对应规则模块（保持 source_ref 注释与 NHK 依据）；
-   - 优先级问题 → `rules_config.json`。
+   - 优先级/相位问题 → `rules_config.json`；需要读别的规则**定稿结果**时改 `phase=VALIDATION`。
 3. **最小修正原则**：优先修正表>预处理>规则；**不得为单案例破坏既有 NHK 规则**——修完后全量 selfcheck 必须零回归。
 4. **用户确认的例外**：若用户明确某差异"没问题"，**记录在用例注释并保留引擎行为**，不强行对齐字符串。
 5. **钉死**：新参照句加入 `test_sentences.txt` 与 `selfcheck.check_reference_sentences`（逐字断言＋注释说明新增规则/例外）。
@@ -187,6 +225,18 @@ text = show_accent(data)            # 直观 NHK 音调标注文本（＼核・�
 - 修饰型 M4（れ/せる 等）与 F3 的**双路径**：M4 前部置平＋公式；F3 尾高保持——修改其一务必回归另一个（許され vs 描かれ）。
 - 非自立動詞零化**仅限补助用法**（前接 助動詞 或 て/で）；主用言用法保留（来た・ナ＼ッタリ）。
 - 引擎渲染（`rule_report.result`）与 `show_accent` 必须同源同规则；`show_accent` 须渲染**全部**下降核（勿只取首核）。
+- **MeCab 品詞是可靠的判别维度**：らしい 的 助動詞/接尾辞 之分（＝NHK 的 推量/本質性 之别）
+  直接来自词典标注，**不要**用前件调型去猜；同理 で＋も vs 接続詞でも 靠「格助詞「で」无前部」
+  判定，比维护接続詞词表更稳。
+- **后部要素表必须表記＋读音双匹配**：只按读音（トシ）会命中同音和語（今年）。
+  新增表项时务必用真实用例试同音词（今年/年、勝ち/価値 类）。
+- **校验遍规则的三条纪律**：① `match` 要能覆盖已推导值（别用 `accent is not None` 挡）；
+  ② 必须重入保护（`derived_by == rule_id`），否则 `while` 空转 16 次；
+  ③ 用它之前先问「这个判定是否必须读到别的规则的**定稿**结果」——是则放校验遍，
+  否则放推导遍（推导遍按 idx 顺序推进，容易误以为需要定稿）。
+- **改单位切分（`compute_units`）风险最高**：它影响**所有**用例。句点断句之所以安全，
+  是因为句点后接的多是名词/副词（本就开新单位）；若要扩到読点，必须先在
+  `test_sentences.txt` 全 23 句上跑 diff 再决定。
 
 ---
 
@@ -198,12 +248,14 @@ text = show_accent(data)            # 直观 NHK 音调标注文本（＼核・�
 cd Utaer/functions/unidic
 python3 selfcheck.py          # 全量回归（200+ 项）；输出「自检结束：全部通过 ✓」为健康状态
 python3 init.py --text "米を盛る"                    # CLI 冒烟
-python3 init.py --input test_sentences.txt           # 20 句语料批跑
+python3 init.py --input test_sentences.txt           # 23 句语料批跑
 ```
 
 - `test_sentences.txt`：开发期语料（每行一句，UTF-8），含全部历史修正句；
-- `selfcheck.check_reference_sentences`：四组用户参照长例句**逐字钉死**（句1 21/21、句2 29/29、
-  句3 10/10、句4 25/25），任何逻辑改动若破坏其中任一句即视为回归；
+- `selfcheck.check_reference_sentences`：**七组**用户参照长例句**逐字钉死**（句1 21/21、句2 29/29、
+  句3 10/10、句4 25/25、句5 20/20、句6 5/5、句7 12/12），任何逻辑改动若破坏其中任一句即视为回归；
+- `selfcheck.check_lexical_usage`：句5–7 归纳出的 6 条通用规则的**独立小例句**回归
+  （每条规则正例＋关键反例，防句级用例掩盖单规则退化；并断言 らしい 的品詞归属规则）；
 - 产物校验：`python3 -m json.tool fast-api/audio/<user>/<audio-id>/audio_accent.json`。
 
 ### 4.2 新增修正指令的验收标准
@@ -221,9 +273,22 @@ python3 init.py --input test_sentences.txt           # 20 句语料批跑
 | 句2 | 今回の大会に関しては…大変でした（笑）。 | 29/29 |
 | 句3 | あの、揺れる世界に…救ってください | 10/10 |
 | 句4 | TVアニメ『薬屋のひとりごと』第3期が10月2日より…描かれた。 | 25/25（コーキュー/デワ 为确认可接受差异） |
+| 句5 | ずっと困っていましたが…思うときもあります。でも自分は、完璧主義らしいです。 | 20/20（しょうがない=0调、形式名詞とき=1调、句点断句、らしい 二分为替） |
+| 句6 | 君が望む通りの私はどう？ | 5/5（方式用法通り=1调） |
+| 句7 | 歌い手と直接繋がってるじゃなく…何がアイだ？ | 12/12（何が=ナニガ） |
+
+句5–7 归纳的规则（2026-10-13 对齐）：`R-PART-RASHII`（らしい 品詞二分为替・校验遍）、
+`R-COMPOUND-HEAD-TYPE`（後部一型要素表）、`R-LEX-PHRASE`（惯用句表）、
+`R-LEX-TOKI`（形式名詞とき）、`R-LEX-TOORI`（方式用法通り）、`R-LEX-NANI`（何の読み分け）、
+`R-LEX-DEMO`（接続詞でも）＋ 文末記号＝文境界。
 
 已知边界：NHK Ⅱ 助数詞一覧表（259项）未在仓库，21–99 的 2単位形与各助数詞调型明细待补；
 形状詞等个别词类接续按已确认范围实现。
+**「らしい」的判定轴已明确为「核是否在语中」**：平板／尾高 → `らし＼い` 直结，
+只有起伏式且核在语中（頭高・中高）才「前件核保持、らしい 不下降」。
+NHK Ⅲ-1 一覧表把 卵（タマゴ）列在中高型却给出 タマゴラシ＼イ，是因为タマゴ另有
+**尾高**音调、尾高与平板同样直结——故该条目与用户规则并不矛盾（用户指摘）。
+`head_type_elements` 表目前仅 NHK Ⅰ ② 原文列举的三项（主義・価値・都市），扩充前须逐项核对 NHK。
 
 ---
 

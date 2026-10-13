@@ -802,6 +802,67 @@ def check_reference_sentences(config: dict) -> None:
           got7 == exp7, got7)
 
 
+# ------------------- 6.85 語彙用法規則（句5–7 帰納：らしい/後部一型/とき/通り/何/文境界）
+def check_lexical_usage(config: dict) -> None:
+    """句5–7 归纳出的 6 条通用规则的**独立小例句**回归（防句级用例掩盖单规则退化）。"""
+    _section("語彙用法規則（句5–7 帰納：らしい二分为替／後部一型／とき／通り／何／文境界）")
+
+    def nhk_line(text: str) -> str:
+        out = pipeline.show_accent(pipeline.analyze_text(text))
+        return [ln for ln in out.splitlines() if ln.startswith("【NHK】")][0][len("【NHK】"):]
+
+    cases = [
+        # —— R-PART-RASHII：らしい按品詞二分为替（助動詞＝F4／接尾辞＝前件核位依存）——
+        ("米らしい", "コメラシ＼ー"),        # 助動詞+F4@2（前件尾高でも決定型成立；旧用例锚点）
+        ("酒らしい", "サケラシ＼ー"),        # 助動詞+F4@2（NHK Ⅲ-1 166 サケラシ＼イ）
+        ("みそらしい", "ミソラシ＼ー"),       # 助動詞+F4@2（NHK Ⅲ-1 174 ミソラシ＼イ）
+        ("人間らしい", "ニンゲンラシ＼ー"),     # 接尾辞・前件平板 → らし＼い（NHK Ⅲ-1 187）
+        ("言葉らしい", "コトバラシ＼ー"),      # 接尾辞・前件**尾高** → らし＼い（用户指摘：尾高は平板と同様に直結）
+        ("完璧主義らしい", "カンペキシュ＼ギラシー"),  # 接尾辞・前件中高 → 前件核保持＋不下降
+        ("プロらしい", "プ＼ロラシー"),       # 接尾辞・前件頭高 → 前件核保持＋不下降
+        ("事実らしい", "ジ＼ジツラシー"),      # 接尾辞・前件頭高 → 前件核保持＋不下降
+        # —— R-COMPOUND-HEAD-TYPE：後部一型要素表（NHK Ⅰ ②）——
+        ("完璧主義", "カンペキシュ＼ギ"),      # 6−2+1=5（词典推断值 4 让位于 NHK 複合名詞规则）
+        ("大都市", "ダイト＼シ"),           # 4−2+1=3
+        ("社会主義", "シャカイシュ＼ギ"),      # 5−2+1=4
+        ("今年は", "コトシワ━"),           # 阴性：コトシ=尾数音 トシ 与 〜都市 同音但不含该汉字
+        # —— R-LEX-TOKI：形式名詞（用言連体形接续）——
+        ("本を読むとき", "ホ＼ンオ・ヨ＼ム・ト＼キ"),
+        ("時を告げる", "トキ＼オ・ツゲル━"),    # 阴性：実質名詞は词典值 2 调
+        # —— R-LEX-TOORI：方式用法（動詞連体形接续）——
+        ("君が望む通り", "キミガ━・ノゾム━・ト＼ーリ"),
+        ("通りの角", "トーリ＼ノ・カ＼ド"),     # 阴性：実質名詞は词典值 3 调
+        # —— R-LEX-NANI：「何」の読み分け ——
+        ("何が", "ナ＼ニガ"),
+        ("何を", "ナ＼ニオ"),
+        ("何に", "ナ＼ンニ"),              # 用户指摘：後接「に」は ナン（なんにしますか）
+        ("何と", "ナ＼ント"),              # 用户指摘：後接「と」は ナン（なんと言う）
+        ("何の", "ナ＼ンノ"),              # 後接「の」も ナン のまま
+        ("何か", "ナ＼ニカ"),              # 副助詞の「か」は ナニ（なにか）
+        ("何かある", "ナ＼ニカ・ア＼ル"),
+        # 阴性：文末の疑問「か」は MeCab が 助詞-終助詞 と标注 → 終助詞は F 规则/本规则
+        # 的对象外（`_eligible` 与 `_match` 双重排除）→ 何 は ナン のまま
+        ("これは何か？", "コレワ━・ナ＼ンカ"),
+        # —— R-LEX-DEMO ＋ 文末記号＝文境界 ——
+        ("雨が降る。でも行く。", "ア＼メガ・フ＼ル・デ＼モ・イク━"),
+        # —— R-LEX-PHRASE：慣用連語（しょうがない）——
+        ("しょうがない", "ショーガナ＼イ"),
+        ("しょうがないって", "ショーガナ＼イッテ"),
+    ]
+    for text, expected in cases:
+        got = nhk_line(text)
+        check(f"{text} → {expected}", got == expected, got)
+
+    # 规则归属：らしい 的两条路径必须由不同规则承担（防「改一条碰坏另一条」）
+    _, report = pipeline.run_pipeline("完璧主義らしいです。", config=config)
+    ids = {r["rule_id"] for r in report["matched_rules"]}
+    check("接尾辞らしい → R-PART-RASHII 命中", "R-PART-RASHII" in ids, str(sorted(ids)))
+    _, report2 = pipeline.run_pipeline("米らしい", config=config)
+    ids2 = {r["rule_id"] for r in report2["matched_rules"]}
+    check("助動詞らしい → R-PART-DECIDING 命中（R-PART-RASHII 不越界）",
+          "R-PART-DECIDING" in ids2 and "R-PART-RASHII" not in ids2, str(sorted(ids2)))
+
+
 # ------------------------------- 6.9 数词读法（NHK Ⅱ：数字链＋促音规则）
 def check_numeral(config: dict) -> None:
     _section("数词读法（numeral_util ＋ R-NUM-READING）")
@@ -937,6 +998,7 @@ def main() -> int:
     check_numeral(config)
     check_extended_sentences(config)
     check_reference_sentences(config)
+    check_lexical_usage(config)
     check_registry(config)
     check_artifacts(config)
 

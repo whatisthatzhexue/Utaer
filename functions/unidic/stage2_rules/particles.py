@@ -37,7 +37,9 @@
 - ``R-PART-KIFUKU``：起伏式付属語（F2/F3/F5/F6 / NHK 表兜底；前部核与付属語核并存）；
 - ``R-PART-TA-TE``：た形・て形接続（NHK Ⅲ-2；一段/カ変/サ変核前移）；
 - ``R-PART-NO-ODAKA``：「の」接尾高型平板化（NHK Ⅲ-1 2.1 例外）；
-- ``R-PART-DECIDING``：付属語決定型（F4 / NHK Ⅲ-2 4.1・Ⅲ-1 2.2）。
+- ``R-PART-DECIDING``：付属語決定型（F4 / NHK Ⅲ-2 4.1・Ⅲ-1 2.2）；
+- ``R-PART-RASHII``：接尾辞「らしい」（**后处理校验型**）——前件定稿核位为 0 调时
+  走 ``らし＼い``，非 0 调时前件核保持（用户确认；句5。助動詞らしい仍归 ``R-PART-DECIDING``）。
 
 范围说明：前部支持**名词/代名词（NHK Ⅲ-1）、动词（NHK Ⅲ-2）与形容词（NHK Ⅲ-3）**；
 形状詞（ナ形容词，如 きれいです）尚未纳入（数据仅含 名詞%/動詞%/形容詞% 三类规格）。
@@ -547,4 +549,84 @@ class PartTaTeRule(Rule):
                 "（ノ＼ンダ；NHK Ⅲ-2 1.1a）"
             )
         front.derived_by = morph.derived_by = self.rule_id
+        morphs.add_report(self, (i - 1, i), logic, morphs.render_range(i - 1, i))
+
+
+#: 接尾辞「らしい」的读音与「らし＼い」下降位置（シ の直後＝接尾辞内 2 拍目）
+RASHII_PRON: str = "ラシー"
+RASHII_TAIL_ACCENT: int = 2
+
+#: 接尾辞「らしい」的合法前部品詞（NHK Ⅲ-1 名词接续）
+RASHII_FRONT_POS: frozenset[str] = frozenset({"名詞", "代名詞"})
+
+
+class PartRashiiRule(Rule):
+    """接尾辞「らしい」：按**前件定稿核位**二分为替（用户确认；句5）。
+
+    MeCab 把「らしい」分成两类（实测）：
+
+    - **助動詞**（米らしい・酒らしい・雨らしい／``a_con_type`` 带 ``名詞%F4@2``）
+      → 由 ``R-PART-DECIDING``（F4 付属語決定型）担当 → コメラシ＼イ；
+    - **接尾辞-形容詞的**（完璧主義らしい・人間らしい／``accent_raw``=2・``C1``）
+      → 本规则担当。此前被 ``R-COMPOUND-C1`` 在 i=0 消费并把前件置平。
+
+    本规则为**后处理校验型**（``phase=VALIDATION``）：在推导遍（含核合法性移位）
+    全部结束之后执行，此时前件的 ``accent`` 已是**定稿值**——
+
+    - 前件为**平板型**（核なし）**または尾高型**（核が最終拍）→ 前件核消失、
+      ``らし＼い`` 生效（NHK Ⅲ-1 187「彼はとても［ニンゲンラシ＼イ］」、
+      同 1489 米＝尾高 → コメラシ＼イ）；
+    - 前件が**起伏式で核が語中**（頭高・中高）→ **前件の核を保持**し、
+      ``らしい`` は下降しない（完璧主義らしい → カンペキシュ＼ギラシー）。
+
+    ※ **「平板＋尾高」で二分するのが要点**（用户指摘）：NHK Ⅲ-1 一覧表で中高型
+    として掲げられる 卵（タマゴ）が本質性らしい で 〜ラシ＼イ となるのは、
+    タマゴに**尾高の音調**があり、尾高は平板と同様に らしい へ直結するため。
+    従って判定は「核が語中か」であり、「0 调か否か」ではない——
+    言葉（コトバ＝尾高）らしい → コトバラシ＼ー（核保持の コトバ＼ラシー は誤り）。
+
+    ※ 校验型实现要点：``match`` **不得**因 ``accent is not None`` 而回避——接尾辞
+    らしい在推导遍已由 ``R-LEX-DICT`` 取到词典值 2，本规则必须能覆盖之；代以
+    ``derived_by`` 作**重入保护**（否则 ``run_engine`` 的 ``while`` 循环空转至 guard=16）。
+    """
+
+    rule_id = "R-PART-RASHII"
+    name = "接尾辞らしい・前件核位依存（校验遍）"
+    source_ref = "用户确认（句5・平板／尾高 → らし＼い）＋ NHK Ⅲ-1 2.2／187・1489"
+    priority = 265                        # 低于 R-NUCLEUS-SPECIAL(1000)，故在其后执行
+    phase = RulePhase.VALIDATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        if i <= 0:
+            return False
+        morph = morphs[i]
+        if morph.derived_by == self.rule_id:
+            return False                   # 重入保护
+        if morph.pos_head != "接尾辞":
+            return False                   # 助動詞らしい → R-PART-DECIDING（F4）
+        if mora_util.strip_brackets(morph.pron) != RASHII_PRON:
+            return False
+        front = morphs[i - 1]
+        if front.pos_head not in RASHII_FRONT_POS:
+            return False
+        return front.accent is not None    # 前件核位须已定稿
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        front, morph = morphs[i - 1], morphs[i]
+        # 核が語中にある場合のみ「前件核保持」。平板（核なし）と尾高（核が最終拍）は
+        # 前件側に語中の下がり目が無いため、らしい へ直結して「らし＼い」が立つ。
+        mid_nucleus = 0 < front.accent < front.mora_count
+        if not mid_nucleus:
+            _place_total(front, morph, front.mora_count + RASHII_TAIL_ACCENT)
+            shape = "平板型" if front.accent == 0 else "尾高型"
+            branch = f"前件为{shape} → 前件核消失，「らし＼い」直結（与付属語決定型同型）"
+        else:
+            morph.accent = 0
+            front.derived_by = self.rule_id
+            branch = (
+                f"前件为起伏式且核在语中（核 {front.accent}／{front.mora_count} 拍）→ "
+                "前件の核を保持し、「らしい」は下降しない"
+            )
+        morph.derived_by = self.rule_id
+        logic = f"「{front.morph}」＋接尾辞「らしい」：{branch}"
         morphs.add_report(self, (i - 1, i), logic, morphs.render_range(i - 1, i))

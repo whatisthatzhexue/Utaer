@@ -32,6 +32,9 @@
   ``R-COMPOUND-C3``（前部末型，受理样例 2 依据）、``R-COMPOUND-C4``（平板型）、
   ``R-COMPOUND-C5``（前部アクセント保持）；各规则同时处理「后部无结合型字段」时的
   NHK 拍数规律兜底判定。
+- ``R-COMPOUND-NAME-TITLE``：个人名＋肩書き不复合（NHK Ⅰ 2））；
+- ``R-COMPOUND-HEAD-TYPE``：**后部一型要素表**（NHK Ⅰ ② 〜主義・〜価値・〜都市）——
+  词典已合并为整体词条（完璧主義）时的后部定调路径。
 """
 
 from __future__ import annotations
@@ -49,6 +52,26 @@ CONNECTION_TYPES: frozenset[str] = frozenset({"C1", "C2", "C3", "C4", "C5"})
 FLAT_REAR_EXCEPTIONS: frozenset[str] = frozenset({
     "語", "化", "間", "顔", "級", "金", "性", "製", "的",
 })
+
+#: 不参与 C 系列复合的接尾辞（结合式的形容词性接尾辞）
+#:
+#: 「らしい」作**接尾辞**时（完璧主義らしい・人間らしい）不是复合名词的后部要素——
+#: 前部核的存续由 ``R-PART-RASHII``（校验遍）按前件定稿核位判定。若在此放行，
+#: ``R-COMPOUND-C1`` 会在 i=0 就吃掉整组并把前件置平，使 ``R-COMPOUND-HEAD-TYPE``
+#: 无从修正前件核位。（助動詞らしい——米らしい等——本就不在 REAR_POS_HEADS 内。）
+NON_COMPOUND_REAR: frozenset[str] = frozenset({"らしい", "ラシイ"})
+
+#: NHK Ⅰ複合名詞 ②「後部要素が２拍の場合は後部一型となる場合もある
+#: 《例》〜価値，〜主義，〜都市など」——后部一型要素表： 表層形 → (读音, 拍数)。
+#:
+#: 词典把「完璧主義」这类整体词条以**推断值**收录（発音字段 ``カ[ンペキ]シュギ``
+#: → 核 4），而 NHK 以**后部要素**定调（〜主義＝後部一型）→ 前部拍数 + 1。
+#: 可在 rules_config.json 的 ``compound.head_type_elements`` 覆盖/扩充。
+HEAD_TYPE_ELEMENTS: dict[str, tuple[str, int]] = {
+    "主義": ("シュギ", 2),
+    "価値": ("カチ", 2),
+    "都市": ("トシ", 2),
+}
 
 #: NHK Ⅰ複合名詞 2）的肩書き（〜氏・名人・博士 等；个人名不复合规则对象）
 TITLE_WORDS: frozenset[str] = frozenset({
@@ -102,6 +125,8 @@ def _eligible_pair(morphs: MorphList, i: int) -> bool:
         return False
     if front.pos_head not in FRONT_POS_HEADS or rear.pos_head not in REAR_POS_HEADS:
         return False
+    if rear.pos_head == "接尾辞" and rear.morph in NON_COMPOUND_REAR:
+        return False                       # 结合式接尾辞らしい → R-PART-RASHII 专管
     if front.mora_count <= 0 or rear.mora_count <= 0:
         return False
     if _is_numeral_front(front) and not _is_counter_rear(rear):
@@ -300,3 +325,82 @@ class CompoundNameTitleRule(Rule):
         )
         result = morphs.render_range(i, i) + "・" + morphs.render_range(i + 1, i + 1)
         morphs.add_report(self, (i, i + 1), logic, result)
+
+
+class CompoundHeadTypeRule(Rule):
+    """后部一型要素表：〜主義／〜価値／〜都市（NHK Ⅰ複合名詞 ②）。
+
+    NHK 原文：「なお，後部要素が２拍の場合は後部一型となる場合もある。
+    《例》〜価値，〜主義，〜都市など。」
+
+    词典把「完璧主義」这类词以**推断值**整体收录（発音字段 ``カ[ンペキ]シュギ``
+    → 核 4），NHK 规则以**后部要素**定调 → 複合語アクセント型 = 前部拍数 + 1
+    （完璧主義：6 − 2 + 1 = 5 → カンペキシュ＼ギ）。
+
+    判定按**读音后缀**（表内要素自身不适用：``mora_count <= 後部拍数`` 时跳过），
+    故 主義・価値・都市 単独、以及 年（トシ=2 拍）等同音短词不受影响。
+    """
+
+    rule_id = "R-COMPOUND-HEAD-TYPE"
+    name = "复合词・后部一型要素表（〜主義・〜価値・〜都市）"
+    source_ref = "NHK Ⅰ複合名詞 ②（後部要素が２拍の場合は後部一型となる場合もある）"
+    priority = 240
+    phase = RulePhase.DERIVATION
+    config_section = "compound"
+
+    def _table(self) -> dict[str, tuple[str, int]]:
+        """后部一型要素表（rules_config.json 的 ``compound.head_type_elements`` 可覆盖）。"""
+        raw = self.options.get("head_type_elements")
+        if isinstance(raw, dict) and raw:
+            table: dict[str, tuple[str, int]] = {}
+            for surface, value in raw.items():
+                if isinstance(value, dict):
+                    kana, moras = value.get("kana", ""), value.get("moras", 0)
+                elif isinstance(value, (list, tuple)) and len(value) == 2:
+                    kana, moras = value[0], value[1]
+                else:
+                    continue
+                try:
+                    moras_int = int(moras)
+                except (TypeError, ValueError):
+                    continue
+                if kana and moras_int > 0:
+                    table[str(surface)] = (str(kana), moras_int)
+            if table:
+                return table
+        return HEAD_TYPE_ELEMENTS
+
+    def _head_type_of(self, morph: MorphState) -> tuple[str, str, int] | None:
+        """返回 ``(表層形, 读音, 拍数)``；非后部一型要素词条则返回 None。
+
+        **表記（漢字）と读音の両方**が一致することを要求する——読みだけでは
+        同音の和語と衝突するため（用例对照：今年（コトシ）は 〜都市（トシ）と
+        末尾 2 拍が一致するが、後部一型要素ではない）。
+        """
+        for surface, (kana, moras) in self._table().items():
+            if morph.mora_count <= moras:
+                continue                   # 该要素自身（主義・都市 等）不适用
+            if morph.morph.endswith(surface) and morph.pron.endswith(kana):
+                return surface, kana, moras
+        return None
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.claimed or morph.accent is not None:
+            return False
+        if morph.pos_head not in ("名詞", "接尾辞"):
+            return False
+        return self._head_type_of(morph) is not None
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        surface, kana, moras = self._head_type_of(morph)
+        accent = morph.mora_count - moras + 1
+        morph.accent = accent
+        morph.derived_by = self.rule_id
+        logic = (
+            f"「{morph.morph}」的末部为后部一型要素「〜{surface}（{kana}）」→ "
+            f"依 NHK Ⅰ複合名詞 ② 複合語アクセント型 = 前部拍数 + 1"
+            f"（{morph.mora_count} − {moras} + 1 = {accent}）"
+        )
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
