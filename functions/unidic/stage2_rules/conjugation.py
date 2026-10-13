@@ -93,7 +93,7 @@ class ConjModRule(Rule):
                     f"N0 − M（{n0} − {modifier} = {morph.accent}）"
                 )
             elif m_type == "M2":
-                flattened = self._flatten_front(front)
+                flattened = self._flatten_chain(morphs, i)
                 if base == 0:
                     morph.accent = 0
                     logic = (
@@ -154,15 +154,26 @@ class ConjModRule(Rule):
             return front.accent
         return 0
 
-    def _flatten_front(self, front: MorphState | None) -> bool:
-        """付属語決定型：前部（動詞/形容詞/形状詞）の核を消失させる。
+    def _flatten_chain(self, morphs: MorphList, i: int) -> bool:
+        """付属語決定型：清零 i 左侧的**整条动词链**（NHK 4.1「動詞部分のアクセントが消え」）。
 
-        返回是否实际置平（用于报告 target 区间判定）。
+        从 i-1 向前：付属語（助詞/助動詞/非自立）连续清零；置平首个核心自立語后停止
+        （不跨越核心再往左，避免误伤更早的独立词，如 本を+読ん+で+い+ます 只清 読んでい）。
+        例：ス＼ン+で+い+ます → スンデイマ＼ス（避免单位内双核）。
+
+        返回是否实际发生置平（用于报告 target 区间判定）。
         """
-        if front is None or front.claimed or front.accent is None:
-            return False
-        if front.pos_head in _FRONT_POS_TO_FLATTEN:
-            front.accent = 0
-            front.derived_by = self.rule_id
-            return True
-        return False
+        zeroed = False
+        k = i - 1
+        while k >= 0:
+            morph = morphs[k]
+            if morph.accent is None or morph.claimed:
+                break
+            attach_like = morph.is_particle_like or ("非自立" in morph.pos)
+            morph.accent = 0
+            morph.derived_by = self.rule_id
+            zeroed = True
+            k -= 1
+            if not attach_like:
+                break                      # 核心自立語已置平，停止向前
+        return zeroed

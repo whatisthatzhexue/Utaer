@@ -232,6 +232,20 @@ def assemble_service_tokens(
     return tokens
 
 
+def _render_multi_fall(kana: str, falls: list[int]) -> str:
+    """在假名串的指定拍（1 起，可多个）之后插入 ＼；无核则末尾 ━（平板型）。"""
+    spans = mora_util.mora_spans(kana)
+    if not spans:
+        return kana + "━"
+    if not falls:
+        return kana + "━"
+    cuts = sorted({spans[min(f, len(spans)) - 1][1] for f in falls}, reverse=True)
+    out = kana
+    for cut in cuts:
+        out = out[:cut] + "＼" + out[cut:]
+    return out
+
+
 def show_accent(data: dict[str, Any]) -> str:
     """将 :func:`analyze_text` 的返回 JSON 转换为直观的 NHK 音调标注文本。
 
@@ -269,19 +283,21 @@ def show_accent(data: dict[str, Any]) -> str:
         moras = [m for t in group for m in (t.get("moras") or [])]
         h_l = [p for t in group for p in (t.get("pitch") or [])]
 
-        fall = 0
+        # 收集単位内全部下降核（付属語決定型等可出现 2 个下降——如 ハレ＼ルデショ＼ー），
+        # 与引擎内部 render_range 的渲染语义一致（不使用仅首核的简化）
+        falls: list[int] = []
         offset = 0
         for token in group:
             count = len(token.get("moras") or [])
             accent = int(token.get("accent", 0) or 0)
-            if fall == 0 and accent > 0:
-                fall = offset + accent
+            if accent > 0:
+                falls.append(offset + accent)
             offset += count
 
         if not moras:
             notation = surface              # 标点等无读音单位：直接以表記呈现
         else:
-            notation = mora_util.render_accent("".join(moras), fall)
+            notation = _render_multi_fall("".join(moras), falls)
         notations.append(notation)
 
         hl_text = f"（{' '.join(h_l)}）" if h_l else ""

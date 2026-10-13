@@ -171,6 +171,26 @@ def _place_total(front: MorphState, morph: MorphState, total: int) -> None:
         morph.accent = total - n1
 
 
+def _flatten_preceding_chain(morphs: MorphList, i: int, rule_id: str) -> None:
+    """付属語決定型：清零 i 左侧的整条动词链（NHK 4.1「動詞部分のアクセントが消え」）。
+
+    连续清零付属語（助詞/助動詞/非自立）；置平首个核心自立語后停止
+    （如 住ん+で+い+ます → スンデイマ＼ス；不跨越核心误伤更早的词：本を+読ん+で+い+ます
+    只清 読んでい）。
+    """
+    k = i - 1
+    while k >= 0:
+        morph = morphs[k]
+        if morph.accent is None or morph.claimed:
+            break
+        attach_like = morph.is_particle_like or ("非自立" in morph.pos)
+        morph.accent = 0
+        morph.derived_by = rule_id
+        k -= 1
+        if not attach_like:
+            break
+
+
 def _is_auxiliary_like(morph: MorphState) -> bool:
     """付属語或须按付属語处理的自立語形判定。
 
@@ -187,11 +207,17 @@ def _is_auxiliary_like(morph: MorphState) -> bool:
 
 
 def _eligible(morphs: MorphList, i: int, front_pos_heads: frozenset[str]) -> bool:
-    """付属語规则的公共前置条件：前部（指定品詞）已推导、本形态素未推导未占用。"""
+    """付属語规则的公共前置条件：前部（指定品詞）已推导、本形态素未推导未占用。
+
+    文末终助词（な・ね・よ・ぞ・ぜ・わ等）不在 NHK 接续表内（Ⅲ-1 明示排除
+    文末终助词）——不参与 F 规则推导，走兜底平板（用例对照：〜ケタナッテ）。
+    """
     if i <= 0:
         return False
     morph = morphs[i]
     if morph.accent is not None or morph.claimed:
+        return False
+    if "終助詞" in morph.pos:
         return False
     if not _is_auxiliary_like(morph):
         return False
@@ -453,6 +479,9 @@ class PartDecidingRule(Rule):
         else:
             particle_accent = DECIDING_FALLBACK[mora_util.strip_brackets(morph.pron)]
             source = "NHK Ⅲ-1 2.2"
+        # 付属語決定型：先行清零 i 左侧的整条动词链（如 〜て+い+ます 的 〜て+い），
+        # 再按文節型 = N1 + M 配置核（避免 ス＼ン 残留核造成单位内双核）
+        _flatten_preceding_chain(morphs, i, self.rule_id)
         _place_total(front, morph, n1 + particle_accent)
         front.derived_by = morph.derived_by = self.rule_id
         logic = (
@@ -501,6 +530,21 @@ class PartTaTeRule(Rule):
     def apply(self, morphs: MorphList, i: int) -> None:
         front, morph = morphs[i - 1], morphs[i]
         pron = mora_util.strip_brackets(morph.pron)
+        # 非自立動詞的**补助用法**先行置平：仅当其前接 助動詞（〜た+なっ+て）或
+        # て/で（〜て+い+た）时——此时是补助动词链；主用言用法（来た、中止に+なっ+た）
+        # 保留词典核（用例对照：タドリツ＼ケタナッテ vs ナ＼ッタリ、キ＼タ）
+        if (
+            "非自立" in front.pos
+            and front.pos_head == "動詞"
+            and front.accent is not None
+            and i >= 2
+            and (
+                morphs[i - 2].pos_head == "助動詞"
+                or mora_util.strip_brackets(morphs[i - 2].pron) in ("テ", "デ")
+            )
+        ):
+            front.accent = 0
+            front.derived_by = self.rule_id
         base = front.accent or 0
         shifted_class = ("一段" in front.conj_type) or ("変格" in front.conj_type)
 

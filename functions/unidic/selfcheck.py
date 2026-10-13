@@ -734,6 +734,26 @@ def check_reference_sentences(config: dict) -> None:
           got2 == _EXPECTED_SENT2, got2)
 
 
+# ------------------------------- 6.95 拓展例句回归（〜ています/でしょう/ください 防护）
+def check_extended_sentences(config: dict) -> None:
+    _section("拓展例句回归（修正项防护：动词链清零/多核渲染/终助词/でしょう）")
+
+    cases = [
+        ("東京都に住んでいます。", "トーキョ＼ートニ・スンデイマ＼ス"),          # F4 链式清零
+        ("コーヒーを飲みながら本を読んでいます。",
+         "コーヒ＼ーオ・ノミナ＼ガラ・ホ＼ンオ・ヨンデイマ＼ス"),               # ながら + 链清零
+        ("明日はきっと晴れるでしょう。", "アス＼ワ・キット━・ハレ＼ルデショ＼ー"),  # 修正表+多核渲染
+        ("電気を消してください。", "デ＼ンキオ・ケシテ━・クダサ＼イ"),            # 命令形补助动词独立
+        ("来ました。", "キマ＼シタ"),                                            # 非自立零化边界（来-保留）
+        ("飲んでいます。", "ノンデイマ＼ス"),                                    # F4 链清零（五段词干）
+        ("大きくなったり。", "オーキ＼ク・ナ＼ッタリ"),                          # 起伏形容词+なる 2単位（NHK Ⅲ-3）
+    ]
+    for text, expected in cases:
+        out = pipeline.show_accent(pipeline.analyze_text(text))
+        got = [ln for ln in out.splitlines() if ln.startswith("【NHK】")][0][len("【NHK】"):]
+        check(f"{text} → {expected}", got == expected, got)
+
+
 # ------------------------------------------------------------- 7. 注册表与配置
 def check_registry(config: dict) -> None:
     _section("注册表（教程 4.3）：优先级 / rule_overrides / custom_rules_dir")
@@ -815,6 +835,7 @@ def main() -> int:
     check_homograph_overrides(config, tagger)
     check_compound_flat_exceptions(config, tagger)
     check_sample_sentences(config)
+    check_extended_sentences(config)
     check_reference_sentences(config)
     check_registry(config)
     check_artifacts(config)

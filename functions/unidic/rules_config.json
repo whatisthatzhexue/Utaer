@@ -8,6 +8,7 @@
     "日本人": {"reading": "ニホンジン", "pron": "ニホンジン", "accent_raw": "4"},
     "南東部": {"accent_raw": "3"},
     "ひとつ": {"accent_raw": "2"},
+    "きっと": {"accent_raw": "0"},
     "（笑）": {"reading": "ワライ", "pron": "ワライ", "accent_raw": "0"},
     "観光地": {"a_con_type": "C1"}
   },
