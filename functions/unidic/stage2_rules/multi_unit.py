@@ -41,11 +41,12 @@ def compute_units(morphs: MorphList) -> list[Unit]:
         prev = morphs[i - 1]
         attach = (
             not morph.new_unit               # 强制新単位标记优先（起伏式付属語第 2 単位等）
-            # 文末記号（句点類）＝ 文境界：アクセント単位は文をまたがないため、
-            # 句点の直後は必ず新単位を開く（用例对照：〜あります。でも → アリマ＼ス・デ＼モ）。
-            # 句点自身は前単位へ并入（判定は「前が句点か」でのみ行うため、
-            # 句点の次に来る付属語が前単位へ吸われない）。読点「、」は文境界ではない。
-            and not prev.is_sentence_end
+            # 区切り記号（句点・読点）＝ アクセント単位境界：直後は必ず新単位を開く
+            # （用例对照：〜あります。でも → アリマ＼ス・デ＼モ；
+            #   〜意味などない、ならいっそ → ナ＼イ・ナ＼ラ）。
+            # 記号自身は前単位へ并入（判定は「前が記号か」でのみ行うため、
+            # 記号の次に来る付属語が前単位へ吸われない）。用户确认（句8）：各種標点で断句。
+            and not prev.is_boundary
             and (
                 morph.is_particle_like      # 付属語紧跟前部（NHK Ⅲ-1 付属語不干渉）
                 # 标点等无读音记号并入前单位；有读音的记号形（如（笑）→ワライ）独立成単位
@@ -57,11 +58,15 @@ def compute_units(morphs: MorphList) -> list[Unit]:
                 # サ変（動詞-非自立可能）并入前部単位：
                 # 名詞＋し/する（勉強+し）或 て/で＋补助动词（〜て+いる → イッテイタ）；
                 # 主用言用法（買い物に+行き）不并入；
-                # 命令形补助动词（〜して＋ください 用例对照：サンコーニ━・シテ━・クダサ＼イ）独立成単位
+                # 命令形补助动词（〜して＋ください 用例对照：サンコーニ━・シテ━・クダサ＼イ）独立成単位；
+                # **授受补助动词**（くれる/もらう/あげる/いただく/やる/くださる）は独立成単位
+                # （用户确认・句8：〜来て＋くれる → キ＼テ・クレル＼カラ）。アスペクト系
+                # （いる/おく/しまう/みる 等）は従来どおり并入（ノ＼ンデイマ＼ス）。
                 or (
                     morph.pos_head == "動詞"
                     and "非自立" in morph.pos
                     and morph.conj_form != "命令形"
+                    and morph.morph not in GIVING_AUX_VERBS
                     and (
                         prev.pos_head == "名詞"
                         or (
@@ -72,11 +77,15 @@ def compute_units(morphs: MorphList) -> list[Unit]:
                 )
                 # 非自立の ない/なる（形容词接续，NHK Ⅲ-3 1.2）并入前部単位：
                 # 如 アマクナ＼イ；起伏式第 2 単位由 new_unit 排除（高くない → タカ＼ク・ナ＼イ）；
-                # 主用言用法（買い物に+行き）不并入
+                # 主用言用法（買い物に+行き）不并入；
+                # **前接副助詞（など/しか/ばかり 等）の場合は独立成単位**
+                # （用户确认・句8：意味など＋ない → イ＼ミナド・ナ＼イ）
                 or (
                     "非自立" in morph.pos
                     and morph.pos_head in ("形容詞", "動詞")
+                    and morph.morph not in GIVING_AUX_VERBS
                     and mora_util.strip_brackets(morph.pron) in KIFUKU_FALLBACK
+                    and not (prev.pos_head == "助詞" and "副助詞" in prev.pos)
                 )
             )
         )
@@ -86,6 +95,15 @@ def compute_units(morphs: MorphList) -> list[Unit]:
     units.append(Unit(unit_id=len(units), start=start, end=len(morphs) - 1))
     return units
 
+
+#: 〜て に後接する**授受・希望系补助动词**（用户确认・句8／2026-10-13 追加）：
+#: 独立成単位（前部へ并入しない）。アスペクト系（いる/おく/しまう/みる 等）は従来どおり并入。
+GIVING_AUX_VERBS: frozenset[str] = frozenset({
+    # 授受
+    "くれる", "もらう", "あげる", "いただく", "やる", "くださる", "さしあげる", "差し上げる",
+    # 希望・依頼（用户追加指示：てほしい・てちょうだい も分単位）
+    "ほしい", "ちょうだい",
+})
 
 #: 指示副詞＋いう 的定型複合単位（用例对照：そういう → ソーユー━）
 _SHIIU_FRONTS: frozenset[str] = frozenset({"そう", "こう", "どう", "ああ"})

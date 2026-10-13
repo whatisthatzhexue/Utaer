@@ -57,6 +57,9 @@ def parse_accent_value(accent_raw: str) -> tuple[int | None, list[int]]:
 #: 文末記号（句点類）——文境界の表層形による判定（pos に ``句点`` を含むものと併用）
 SENTENCE_END_SYMBOLS: frozenset[str] = frozenset({"。", "．", "！", "？", "!", "?"})
 
+#: 区切り記号（読点類）——文末ではないがアクセント単位境界を作る
+PAUSE_SYMBOLS: frozenset[str] = frozenset({"、", "，", ",", "；", ";", "：", ":"})
+
 
 @dataclass
 class Unit:
@@ -149,14 +152,23 @@ class MorphState:
 
     @property
     def is_sentence_end(self) -> bool:
-        """文末记号（句点类）判定——**文境界**：其后形态素开启新アクセント単位。
-
-        アクセント単位は文をまたがない（NHK Ⅲ全般 4.）。読点「、」は文境界では
-        ないため対象外（单位切分仍按付属語/复合规则）。记事号自身仍并入前单位。
-        """
+        """文末记号（句点类）判定——**文境界**（文が終わる）。"""
         if not self.is_symbol:
             return False
         return self.morph in SENTENCE_END_SYMBOLS or "句点" in self.pos
+
+    @property
+    def is_boundary(self) -> bool:
+        """区切り记号（句点・読点）判定——**アクセント単位境界**：其后形态素开启新単位。
+
+        アクセント単位は文・節をまたがない（NHK Ⅲ全般 4.）。用户确认（句8）：
+        **読点も含め各種標点符号で断句する**（記号＝单位境界）。记号自身仍并入前单位。
+        """
+        if not self.is_symbol:
+            return False
+        if self.is_sentence_end:
+            return True
+        return self.morph in PAUSE_SYMBOLS or "読点" in self.pos
 
     @property
     def is_nominal(self) -> bool:

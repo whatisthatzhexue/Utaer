@@ -226,6 +226,48 @@ class TooriMannerRule(Rule):
         morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
 
 
+class StandaloneNaraRule(Rule):
+    """区切り記号の直後に**単独で**現れる「なら／ならば」→ 1 調（用户确认；句8）。
+
+    NHK Ⅲ-1 1.2 は なら［〜ナ＼ラ］・ならば［〜ナ＼ラバ］ を起伏式付属語として
+    掲げるが、词典（助動詞-ダ・仮定形）の ``a_con_type`` は ``名詞%F1``——前部名詞に
+    接する用法では「付属語不干渉」が働く。ところが文頭・読点/句点直後では前部が
+    存在せず（＝単独用法）、F 规则の適用対象外となって兜底平板に落ちてしまう。
+
+    用户指示（2026-10-13）：「なら单独出现时，应该为1调」→ 本规则只覆盖**単独用法**，
+    前部名詞に接する用法は従来どおり F1（不干渉）に委ねる。
+    """
+
+    rule_id = "R-LEX-NARA"
+    name = "単独用法のなら・ならば（区切り記号直後）"
+    source_ref = "用户确认（句8）；NHK Ⅲ-1 1.2（なら［〜ナ＼ラ］）"
+    priority = 285                        # 让位对象：R-CONJ-MOD(280) 的 M2@1 数据
+    phase = RulePhase.DERIVATION          # （基本形 0 型分支）与该 NHK 表冲突（资料三优先）
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.claimed or morph.accent is not None:
+            return False
+        if "助動詞" not in morph.pos:
+            return False
+        if mora_util.strip_brackets(morph.pron) not in ("ナラ", "ナラバ"):
+            return False
+        if i == 0:
+            return True                   # 文頭
+        return morphs[i - 1].is_boundary  # 読点/句点の直後
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        morph.accent = 1                  # ナ＼ラ
+        morph.derived_by = self.rule_id
+        where = "文頭" if i == 0 else f"「{morphs[i - 1].morph}」直後"
+        logic = (
+            f"{where}に単独で現れる「{morph.morph}」→ 前部が存在しないため F 规则の"
+            "対象外、NHK Ⅲ-1 1.2 の起伏式 なら［〜ナ＼ラ］ に従い 调型=1"
+        )
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
 class NaniReadingRule(Rule):
     """「何」の読み分け：後接の助詞により ナニ／ナン（用户确认；句7）。
 

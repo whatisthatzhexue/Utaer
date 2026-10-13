@@ -375,8 +375,11 @@ def check_particles_m4(config: dict) -> None:
           last_result("酒まで") == "サケマ＼デ", last_result("酒まで"))
     check("みそまで → ミ＼ソ・マ＼デ（NHK 1.2b 原文例；前部核+第2単位）",
           last_result("みそまで") == "ミ＼ソ・マ＼デ", last_result("みそまで"))
-    check("米まで → コメ＼・マ＼デ（NHK 1.2c 第一形式）",
-          last_result("米まで") == "コメ＼・マ＼デ", last_result("米まで"))
+    # NHK 1.2c 对尾高型前部＋まで 同时列出两形（コメ＼・マ＼デ／コメ＼マデ）。
+    # 用户确认（2026-10-13・句9）：**尾高前部统一取合流形**（付属語核消失）——
+    # 与 遠くまで → トーク＼マデ 保持一致；頭高前部（みそ）仍保持第 2 単位形。
+    check("米まで → コメ＼マデ（NHK 1.2c 第二形式；用户确认：尾高前部统一合流）",
+          last_result("米まで") == "コメ＼マデ", last_result("米まで"))
     check("米ぐらい → コメグ＼ライ（NHK 2.2 原文例；F4@1 決定型）",
           last_result("米ぐらい") == "コメグ＼ライ", last_result("米ぐらい"))
     check("みそぐらい → ミソグ＼ライ（NHK 2.2 原文例）",
@@ -801,6 +804,27 @@ def check_reference_sentences(config: dict) -> None:
     check("句7：12/12 逐字一致（何が=ナニガ）",
           got7 == exp7, got7)
 
+    # 句8（用户输入1）——**待对齐**：规则层已完成，剩余 3 处为词典层（MeCab 句中
+    # 断路径把 もう/から/ちゃんと 改判为 名詞-固有名詞，以及 この道 整词调型），
+    # 按用户指示（2026-10-13）本轮暂不登记 homograph_overrides，故暂不断言。
+    # 用户预期（14 単位）：
+    #   モ＼ー・コノミチ━・サイショカラ━・イ＼ミナド・ナ＼イ・ナラ・イッソ━・
+    #   スキ＼ニ・イキ＼レバ・イ＼ー・チャント━・オワリワ━・キ＼テ・クレル＼カラ
+    # 其中「ナラ」按用户后续更正取 ナ＼ラ（单独出现=1 調）。
+    # 现引擎（12 単位）残留差异：
+    #   #0 モ＼ー＋#1 コノミチ━  ← もう(句中被改判固有名詞)＋この道 误复合
+    #   #2 サイショカラ━        ← から 句中被改判固有名詞 → 误复合
+    #   #10 チャント━＋#11 オワリワ━ ← ちゃんと 句中被改判固有名詞 → 误复合
+    # 规则层已一致的部分见「語彙用法規則（句8–9 帰納）」段。
+
+    # 句9（用户输入2）：方式用法まで の合流形を含め 10/10 逐字一致
+    t9 = "まあ、これが正しくできるはずだったのに遠くまで伝わる光が密やかに囁くの"
+    exp9 = ("マ＼ー・コレガ━・タダシ＼ク・デキ＼ル・ハズダ＼ッタノニ・"
+            "トーク＼マデ・ツタワル━・ヒカリ＼ガ・ヒソ＼ヤカニ・ササヤ＼クノ")
+    got9 = nhk_line(t9)
+    check("句9：10/10 逐字一致（標点断句、〜ダ＼ッタ、尾高前部＋まで 合流）",
+          got9 == exp9, got9)
+
 
 # ------------------- 6.85 語彙用法規則（句5–7 帰納：らしい/後部一型/とき/通り/何/文境界）
 def check_lexical_usage(config: dict) -> None:
@@ -861,6 +885,60 @@ def check_lexical_usage(config: dict) -> None:
     ids2 = {r["rule_id"] for r in report2["matched_rules"]}
     check("助動詞らしい → R-PART-DECIDING 命中（R-PART-RASHII 不越界）",
           "R-PART-DECIDING" in ids2 and "R-PART-RASHII" not in ids2, str(sorted(ids2)))
+
+
+# ------------- 6.87 標点断句・助動詞・补助动词（句8–9 帰納；2026-10-13 第二轮）
+def check_boundary_and_aux(config: dict) -> None:
+    """句8/句9 归纳出的规则的**独立小例句**回归（正例＋关键反例）。"""
+    _section("標点断句／だった／なら／など／まで合流／补助动词（句8–9 帰納）")
+
+    def nhk_line(text: str) -> str:
+        out = pipeline.show_accent(pipeline.analyze_text(text))
+        return [ln for ln in out.splitlines() if ln.startswith("【NHK】")][0][len("【NHK】"):]
+
+    cases = [
+        # —— 標点断句（用户确认・句8：各種標点で断句）——
+        ("意味などない、ならいっそ", "イ＼ミナド・ナ＼イ・ナ＼ラ・イッソ━"),
+        ("雨が降る。でも行く。", "ア＼メガ・フ＼ル・デ＼モ・イク━"),
+        ("私は学生です。彼も学生です。",
+         "ワタシワ━・ガクセイデ＼ス・カ＼レモ・ガクセイデ＼ス"),
+        # —— R-PART-DATTA：だった = 〜ダ＼ッタ（NHK Ⅲ-1 1.2；词典 M2@1 让位）——
+        ("学生だった", "ガクセイダ＼ッタ"),
+        ("はずだったのに", "ハズダ＼ッタノニ"),        # 后接 の/に 不再张核（句9 锚点）
+        # —— R-LEX-NARA：区切り記号直後の単独 なら（用户确认）——
+        ("なら", "ナ＼ラ"),
+        ("ならば", "ナ＼ラバ"),
+        # —— など = 平板式付属語・不干涉（用户确认・句8；NHK 1.2 的起伏式让位）——
+        ("意味などない", "イ＼ミナド・ナ＼イ"),
+        ("酒などを飲む", "サ＼ケナドオ・ノ＼ム"),
+        # —— 尾高前部＋まで = 合流（NHK 1.2c 第二形式；用户确认・句9）——
+        ("米まで", "コメ＼マデ"),
+        ("近くまで", "チ＼カク・マ＼デ"),      # 阴性：頭高前部保持第 2 単位形
+        ("みそまで", "ミ＼ソ・マ＼デ"),        # 阴性：頭高前部保持第 2 単位形
+        # —— 授受・希望系补助动词独立成単位（用户确认・句8／追加指示）——
+        ("来てくれる", "キ＼テ・クレル━"),
+        ("見てもらう", "ミ＼テ・モラウ━"),
+        ("食べてほしい", "タ＼ベテ・ホシ＼ー"),
+        ("見てちょうだい", "ミ＼テ・チョーダ＼イ"),
+        ("教えてさしあげる", "オシエテ━・サシアゲル━"),
+        # —— 阴性：アスペクト系补助动词仍并入（既有用例锚点）——
+        ("読んでいる", "ヨ＼ンデイル"),
+        ("飲んでいます", "ノ＼ンデイマ＼ス"),
+        ("食べておく", "タ＼ベテオク"),
+        # —— 阴性：ない 的并入范围未放宽 ——
+        ("甘くない", "アマクナ＼イ"),
+    ]
+    for text, expected in cases:
+        got = nhk_line(text)
+        check(f"{text} → {expected}", got == expected, got)
+
+    # 规则归属：だった 由 R-PART-DATTA 定调（防 R-CONJ-MOD 的 M2@1 再度夺回）
+    _, report = pipeline.run_pipeline("学生だった", config=config)
+    ids = {r["rule_id"] for r in report["matched_rules"]}
+    check("だった → R-PART-DATTA 命中", "R-PART-DATTA" in ids, str(sorted(ids)))
+    _, report2 = pipeline.run_pipeline("意味などない、ならいっそ", config=config)
+    ids2 = {r["rule_id"] for r in report2["matched_rules"]}
+    check("単独なら → R-LEX-NARA 命中", "R-LEX-NARA" in ids2, str(sorted(ids2)))
 
 
 # ------------------------------- 6.9 数词读法（NHK Ⅱ：数字链＋促音规则）
@@ -999,6 +1077,7 @@ def main() -> int:
     check_extended_sentences(config)
     check_reference_sentences(config)
     check_lexical_usage(config)
+    check_boundary_and_aux(config)
     check_registry(config)
     check_artifacts(config)
 

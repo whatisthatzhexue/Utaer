@@ -93,6 +93,19 @@ DECIDING_FALLBACK: dict[str, int] = {
 TA_TE_SHORT: frozenset[str] = frozenset({"タ", "ダ", "テ", "デ"})
 TA_TE_TARA: frozenset[str] = frozenset({"タラ", "ダラ", "タリ", "ダリ"})
 
+#: 用户确认的**平板式**付属語（词典 F 规格与之冲突时以用户确认为准）
+#:
+#: など：NHK Ⅲ-1 1.2 列为起伏式［〜ナ＼ド］，但用户确认按**平板式・不干涉**处理
+#: （用例对照・句8：意味などない → イ＼ミナド・ナ＼イ（非 イ＼ミ・ナ＼ド））。
+USER_FLAT_PARTICLES: frozenset[str] = frozenset({"ナド"})
+
+#: 尾高型前部＋起伏式付属語で付属語核が消える条件の核位置（NHK Ⅲ-1 1.2 c）
+ODAKA_MERGE_TAIL_ACCENT: int = 1
+
+#: 「だった」の促音便連用形（NHK Ⅲ-1 1.2 〜ダ＼ッタ の構成要素）
+DATTA_STEM: frozenset[str] = frozenset({"だっ", "ダッ"})
+DATTA_TAIL: frozenset[str] = frozenset({"た", "タ"})
+
 #: 「の」平板化例外的词表（NHK Ⅲ-1 2.1：顺序词等；数詞另按 pos 判定）
 NO_ODAKA_EXCEPTION_WORDS: frozenset[str] = frozenset({
     "次", "よそ", "基地", "地下", "ヒ素", "一日",
@@ -236,10 +249,12 @@ class PartFlatRule(Rule):
         if not _eligible(morphs, i, F_RULE_FRONT_POS):
             return False
         morph = morphs[i]
+        pron = mora_util.strip_brackets(morph.pron)
+        if pron in USER_FLAT_PARTICLES:
+            return True                   # 用户确认的平板式（优先于词典 F 规格）
         f_spec = _parse_f_spec(morph.a_con_type, morphs[i - 1].pos_head)
         if f_spec is not None:
             return f_spec[0] == F1        # 词典 F 数据：F1 = 付属語不干渉
-        pron = mora_util.strip_brackets(morph.pron)
         return pron in FLAT_PARTICLES_1MORA or pron in FLAT_PARTICLES_MULTI
 
     def apply(self, morphs: MorphList, i: int) -> None:
@@ -272,6 +287,8 @@ class PartKifukuRule(Rule):
         if not _eligible(morphs, i, F_RULE_FRONT_POS):
             return False
         morph = morphs[i]
+        if mora_util.strip_brackets(morph.pron) in USER_FLAT_PARTICLES:
+            return False                  # 用户确认的平板式 → 归 R-PART-FLAT
         f_spec = _parse_f_spec(morph.a_con_type, morphs[i - 1].pos_head)
         if f_spec is not None:
             return f_spec[0] in (F2, F3, F5, F6)
@@ -309,7 +326,16 @@ class PartKifukuRule(Rule):
             # 助動詞链尾且 M≥1（如 〜れ+た 的 た）：合并保持不插入
             # （用例对照：エガカ＼レタ）；M=0 型（けど等下がり目插入型）不受此限
             # （用例对照：イッテイタ＼ケド）
-            if front.accent == 0 and not (front.pos_head == "助動詞" and m1_param >= 1):
+            #
+            # 「だった」の後続付属語は不干渉（用户确认・句9）：R-PART-DATTA が既に
+            # 文節全体（ダ＼ッタ）を定調・占用済みのため、後続の の/に が改めて
+            # 文節型 = N1 + M を張り直すと核が二重化する
+            # （ハズダ＼ッタ＼ノニ ✗ → ハズダ＼ッタノニ ✓）
+            if (
+                front.accent == 0
+                and not (front.pos_head == "助動詞" and m1_param >= 1)
+                and front.derived_by != "R-PART-DATTA"
+            ):
                 _place_total(front, morph, n1 + m1_param)
                 logic = (
                     f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
@@ -319,6 +345,10 @@ class PartKifukuRule(Rule):
                 m1_param >= 1
                 and front.pos_head != "助動詞"                       # 付属語链尾不拆単位
                 and mora_util.strip_brackets(morph.pron) not in _MERGED_AUX
+                # 尾高型前部かつ付属語の核が 1 拍目直後（M=1）→ 付属語核が消えて合流
+                # （NHK Ⅲ-1 1.2 c：コメ＼＋マ＼デ ＝ コメ＼マデ。用户确认・句8：
+                #  尾高前部＋まで は合流形を採る → 米まで も コメ＼マデ に統一）
+                and not (front.accent == n1 and m1_param == ODAKA_MERGE_TAIL_ACCENT)
             ):
                 morph.accent = m1_param
                 morph.new_unit = True
@@ -328,12 +358,20 @@ class PartKifukuRule(Rule):
                     "（NHK Ⅲ-1 1.2 b／Ⅲ-2 1.2a）"
                 )
             else:
-                # M=0（直接連続）／です・でし（合并保持）／付属語链尾：前部核保持、付属語置平
+                # M=0（直接連続）／です・でし（合并保持）／付属語链尾／尾高前部＋M=1 合流：
+                # 前部核保持、付属語置平
                 morph.accent = 0
-                logic = (
-                    f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
-                    "前部核保持、付属語直接連続（M=0／です・でし／付属語链尾）"
-                )
+                if front.accent == n1 and n1 > 0 and m1_param == ODAKA_MERGE_TAIL_ACCENT:
+                    logic = (
+                        f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
+                        "前部为尾高型且付属語核位于 1 拍目直后：付属語核消失、"
+                        "尾高核保持不变（NHK Ⅲ-1 1.2 c コメ＼＋マ＼デ＝コメ＼マデ）"
+                    )
+                else:
+                    logic = (
+                        f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
+                        "前部核保持、付属語直接連続（M=0／です・でし／付属語链尾）"
+                    )
         elif f_type == F3:
             if front.accent == 0:
                 morph.accent = 0
@@ -550,6 +588,51 @@ class PartTaTeRule(Rule):
             )
         front.derived_by = morph.derived_by = self.rule_id
         morphs.add_report(self, (i - 1, i), logic, morphs.render_range(i - 1, i))
+
+
+class PartDattaRule(Rule):
+    """助動詞「だっ（促音便連用形）＋た」→ 〜ダ＼ッタ（NHK Ⅲ-1 1.2）。
+
+    NHK Ⅲ-1 起伏式付属語表原文：「だった［〜ダ＼ッタ］・だって［〜ダ＼ッテ］」——
+    核は**促音便連用形「だっ」の 1 拍目（ダ）の直後**にあり、「た」は置平。
+
+    词典把「だった」拆为 ``だっ``（无调型）＋``た``（无调型）两 token，若不介入，
+    ``だっ`` 走兜底平板（0）、``た`` 再按文節型取核 → ハズダッタ＼（核が末尾）。
+    本规则在「だっ」位置一次定调两个形态素（用例对照・句9：
+    はずだったのに → ハズダ＼ッタノニ）。
+    """
+
+    rule_id = "R-PART-DATTA"
+    name = "助動詞だった・促音便連用形"
+    source_ref = "NHK Ⅲ-1 1.2（だった［〜ダ＼ッタ］）"
+    priority = 285                        # 让位对象：R-CONJ-MOD(280) 的 M2@1 数据
+    phase = RulePhase.DERIVATION          # 与该 NHK 表冲突（资料三优先）
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        if i + 1 >= len(morphs):
+            return False
+        stem, tail = morphs[i], morphs[i + 1]
+        if stem.claimed or tail.claimed:
+            return False
+        if stem.accent is not None or tail.accent is not None:
+            return False
+        if stem.morph not in DATTA_STEM or "助動詞" not in stem.pos:
+            return False
+        if "促音便" not in (stem.conj_form or ""):
+            return False
+        return tail.morph in DATTA_TAIL and "助動詞" in tail.pos
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        stem, tail = morphs[i], morphs[i + 1]
+        stem.accent = 1                   # ダ＼ッ
+        tail.accent = 0
+        tail.claimed = True
+        stem.derived_by = tail.derived_by = self.rule_id
+        logic = (
+            "助動詞「だっ（促音便連用形）＋た」→ NHK Ⅲ-1 1.2 〜ダ＼ッタ："
+            "核は「だっ」の 1 拍目直後、「た」は置平（词典无调型的兜底拆分を上書き）"
+        )
+        morphs.add_report(self, (i, i + 1), logic, morphs.render_range(i, i + 1))
 
 
 #: 接尾辞「らしい」的读音与「らし＼い」下降位置（シ の直後＝接尾辞内 2 拍目）
