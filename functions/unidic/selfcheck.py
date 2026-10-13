@@ -107,7 +107,7 @@ def check_show_accent(config: dict) -> None:
     check("米を盛る：逐字输出", pipeline.show_accent(result) == expected,
           pipeline.show_accent(result))
     check("私は学生です。：记号行（尾高+助詞/平板+です）",
-          "【NHK】ワタクシワ━・ガクセイデ＼ス"
+          "【NHK】ワタシワ━・ガクセイデ＼ス"
           in pipeline.show_accent(pipeline.analyze_text("私は学生です。")))
     check("東京駅：明細（L H H L L L）",
           "[単位0] 東京駅：トーキョ＼ーエキ（L H H L L L）"
@@ -459,8 +459,8 @@ def check_sample_sentences(config: dict) -> None:
         multi = [r for r in report["matched_rules"] if r["rule_id"] == "R-MULTI-UNIT"]
         return multi[0]["result"] if multi else ""
 
-    check("私は学生です。→ ワタクシワ━・ガクセイデ＼ス（F2@1 です）",
-          full_render("私は学生です。") == "ワタクシワ━・ガクセイデ＼ス",
+    check("私は学生です。→ ワタシワ━・ガクセイデ＼ス（私=ワタシ；F2@1 です）",
+          full_render("私は学生です。") == "ワタシワ━・ガクセイデ＼ス",
           full_render("私は学生です。"))
     check("東京駅まで歩きます。→ トーキョ＼ーエキ・マ＼デ・アルキマ＼ス",
           full_render("東京駅まで歩きます。") == "トーキョ＼ーエキ・マ＼デ・アルキマ＼ス",
@@ -737,6 +737,15 @@ def check_reference_sentences(config: dict) -> None:
     check("句2：29/29 単位逐字一致（含た/て家族、そういう合并、です/でし、形状詞+でし、"
           "数詞不合并、ユー＼ノガ、ワライ━ 等 13 项逻辑修正）",
           got2 == _EXPECTED_SENT2, got2)
+
+    t3 = ("あの、揺れる世界に落ちている私は許されないでしょうかって"
+          "思い込んだら、どうぞ救ってください")
+    exp3 = ("アノ━・ユレル━・セ＼カイニ・オ＼チテイル・ワタシワ━・"
+            "ユルサレ＼ナイデショ＼ーカッテ・オモイコンダ＼ラ・ド＼ーゾ・"
+            "スクッテ━・クダサ＼イ")
+    got3 = nhk_line(t3)
+    check("句3：10/10 逐字一致（私=ワタシ、あの=平板、M4前部清零、複合動詞首位规则）",
+          got3 == exp3, got3)
 
 
 # ------------------------------- 6.9 数词读法（NHK Ⅱ：数字链＋促音规则）

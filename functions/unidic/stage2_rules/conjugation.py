@@ -107,6 +107,7 @@ class ConjModRule(Rule):
                         f"N0 − M（{n0} − {modifier} = {morph.accent}）；前部核消失（付属語決定型）"
                     )
             else:  # M4（一段活用の未然形）
+                flattened = self._flatten_front(front)
                 if base == 0:
                     morph.accent = 0
                     logic = f"表9 M4@{modifier}（一段活用の未然形）→ 基本形 0 型 → 保持平板（M0 = 0）"
@@ -114,7 +115,7 @@ class ConjModRule(Rule):
                     morph.accent = max(0, base - modifier)
                     logic = (
                         f"表9 M4@{modifier}（一段活用の未然形）→ 基本形非 0 型 → "
-                        f"M0 − M（{base} − {modifier} = {morph.accent}）"
+                        f"M0 − M（{base} − {modifier} = {morph.accent}）；前部核消失"
                     )
         else:
             # 命令形（NHK Ⅲ-2 活用形一覧表：タベ＼ロ、ノ＼メ、コ＼イ、シロ━）

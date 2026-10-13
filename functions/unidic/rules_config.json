@@ -11,6 +11,8 @@
     "きっと": {"accent_raw": "0"},
     "なる": {"accent_raw": "1"},
     "なっ": {"accent_raw": "1"},
+    "私": {"reading": "ワタシ", "pron": "ワタシ", "accent_raw": "0"},
+    "あの": {"accent_raw": "0"},
     "（笑）": {"reading": "ワライ", "pron": "ワライ", "accent_raw": "0"},
     "観光地": {"a_con_type": "C1"}
   },

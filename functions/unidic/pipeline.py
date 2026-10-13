@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import compound_verb
 import env_util
 import mora_util
 import numeral
@@ -98,6 +99,11 @@ def _run_context(
         # 预处理：阿拉伯数字链＋助数詞 → NHK Ⅱ 合成读法（numeral.enabled 开关）
         if bool((config.get("numeral") or {}).get("enabled", True)):
             numeral.merge_numerals(ctx)
+        # 预处理：多调型複合動詞 → 首位動詞规则裁定（compound_verb.enabled 开关）
+        if bool((config.get("compound_verb") or {}).get("enabled", True)):
+            compound_verb.apply_compound_verb_rule(
+                ctx, tagger, config.get("homograph_overrides", {})
+            )
         rules = load_registry(config)
         run_engine(ctx, rules)
     return ctx, stage1_result, config
