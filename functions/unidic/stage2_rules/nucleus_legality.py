@@ -55,10 +55,14 @@ class NucleusSpecialRule(Rule):
     phase = RulePhase.VALIDATION
     config_section = "nucleus_legality"
 
-    def _illegal_reason(self, moras: list[str], idx: int) -> str:
+    def _illegal_reason(self, morph: MorphState, moras: list[str], idx: int) -> str:
         """返回第 idx 拍不可承载核的原因；可承载时返回空串。"""
         mora = moras[idx]
         if mora_util.is_special_mora(mora):
+            # 動詞末尾的「ー」（ウ 的口语缩合，如 いう→ユー）允许承载尾高核
+            # （用例对照：ユー＼ノガ；名词性长音仍按 NHK Ⅲ全般 A 回避，如 カレ＼ーパン）
+            if mora == "ー" and morph.pos_head == "動詞" and idx == len(moras) - 1:
+                return ""
             return f"「{mora}」为特殊拍（拨音/促音/长音）"
         if mora_util.is_diphthong_glide(moras, idx):
             return f"「{mora}」为二重母音副音（イ）"
@@ -74,13 +78,13 @@ class NucleusSpecialRule(Rule):
         if not moras:
             return False
         nucleus_index = min(morph.accent, len(moras)) - 1
-        return bool(self._illegal_reason(moras, nucleus_index))
+        return bool(self._illegal_reason(morph, moras, nucleus_index))
 
     def apply(self, morphs: MorphList, i: int) -> None:
         morph = morphs[i]
         moras = mora_util.split_moras(morph.pron)
         nucleus_index = min(morph.accent, len(moras)) - 1
-        reason = self._illegal_reason(moras, nucleus_index)
+        reason = self._illegal_reason(morph, moras, nucleus_index)
         before = morph.accent
         morph.accent = max(0, (before or 0) - 1)
         morph.derived_by = self.rule_id

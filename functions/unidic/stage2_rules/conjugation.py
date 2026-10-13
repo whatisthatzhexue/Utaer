@@ -136,11 +136,23 @@ class ConjModRule(Rule):
 
     @staticmethod
     def _base_accent(front: MorphState | None, morph: MorphState) -> int:
-        """基本形のアクセント型（M0）：前部（已推导）优先，否则取本 token 的词典值。"""
-        if front is not None and front.accent is not None and not front.claimed:
+        """基本形のアクセント型（M0）。
+
+        优先取本 token 的词典调型（如 関し=M4@1 时其自身值 3）；
+        仅当本 token 无词典调型（补助活用形，如 たかっ a='-'）时，
+        取前部（動詞/形容詞/形状詞，已推导）的核位置。
+        """
+        own, _ = parse_accent_value(morph.accent_raw)
+        if own is not None:
+            return own
+        if (
+            front is not None
+            and front.accent is not None
+            and not front.claimed
+            and front.pos_head in _FRONT_POS_TO_FLATTEN
+        ):
             return front.accent
-        base, _ = parse_accent_value(morph.accent_raw)
-        return base if base is not None else 0
+        return 0
 
     def _flatten_front(self, front: MorphState | None) -> bool:
         """付属語決定型：前部（動詞/形容詞/形状詞）の核を消失させる。

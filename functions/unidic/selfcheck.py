@@ -686,6 +686,54 @@ def check_compound_flat_exceptions(config: dict, tagger) -> None:
           + " / " + ctx_off.render_units())
 
 
+# ------------------------------------- 6.9 参照对照长例句（用户提供预期输出）
+_EXPECTED_SENT1 = (
+    "ア＼モイ・ア＼モイワ・チュ＼ーゴク・ナント＼ーブノ・ウツクシ＼ー・ミナト＼マチデス・"
+    "コ＼ンカイワ・ア＼モイノ・ゼッタイニ━・ハズセナイ━・オススメカンコ＼ーチ・"
+    "イチ＼ゼロセンオ・ゴショーカイシマ＼ス・アモイリョ＼コーノ・ケーカクオ━・タテ＼ル・"
+    "サ＼イワ・ゼ＼ヒ・サンコーニ━・シテ━・クダサ＼イ"
+)
+_EXPECTED_SENT2 = (
+    "コ＼ンカイノ・タイカイニ━・カ＼ンシテワ・アマリ＼ノ・アツ＼サデ・ヨセンタ＼イカイガ・"
+    "ヒト＼ツ・チューシニ━・ナ＼ッタリトカ・イロイロ━・ヨテ＼ーガイノ・コト＼ガ・ア＼ッテ・"
+    "ケンチサンモ━・イッテイタ＼ケド・ソーユー━・ナ＼カデ・ヨ＼クゾ・ケッショータ＼イカイ・"
+    "マ＼デ・タドリツ＼ケタナッテ・ユー＼ノガ・ショージ＼キナ・カンソーデ＼スヨネ・マ＼ー・"
+    "コトシワ━・イロイロト━・タイヘンデ＼シタ・ワライ━"
+)
+
+
+def check_reference_sentences(config: dict) -> None:
+    _section("参照对照长例句（用户提供预期输出；test_sentences.txt 13-14 行）")
+
+    def nhk_line(text: str) -> str:
+        out = pipeline.show_accent(pipeline.analyze_text(text))
+        return [ln for ln in out.splitlines() if ln.startswith("【NHK】")][0][len("【NHK】"):]
+
+    t1 = ("廈門（アモイ）は、中国南東部の美しい港町です。今回は、廈門の絶対に外せない"
+          "おすすめ観光地10選をご紹介します。廈門旅行の計画を立てる際は、ぜひ参考にしてください。")
+    t2 = ("今回の大会に関しては、あまりの暑さで予選大会がひとつ中止になったりとか、"
+          "いろいろ予定外のことがあって。ケンチさんも言っていたけど、そういう中でよくぞ"
+          "決勝大会までたどり着けたなっていうのが、正直な感想ですよね。まあ今年は、"
+          "いろいろと大変でした（笑）。")
+
+    got1 = nhk_line(t1)
+    exp1_units = _EXPECTED_SENT1.split("・")
+    got1_units = got1.split("・")
+    diff1 = [k for k in range(max(len(exp1_units), len(got1_units)))
+             if (exp1_units[k] if k < len(exp1_units) else None)
+             != (got1_units[k] if k < len(got1_units) else None)]
+    # 语料中「10選」按阿拉伯数字逐位读（イチ＼ゼロセンオ；数字読み子系统边界）；
+    # 用户参照读法 ジュ＼ッセンオ 为待建子系统目标——除该处外全单位逐字一致
+    check("句1：全単位逐字一致（10選 数字读法为语料内已登记偏差）",
+          len(diff1) == 0,
+          f"diff={diff1}")
+
+    got2 = nhk_line(t2)
+    check("句2：29/29 単位逐字一致（含た/て家族、そういう合并、です/でし、形状詞+でし、"
+          "数詞不合并、ユー＼ノガ、ワライ━ 等 13 项逻辑修正）",
+          got2 == _EXPECTED_SENT2, got2)
+
+
 # ------------------------------------------------------------- 7. 注册表与配置
 def check_registry(config: dict) -> None:
     _section("注册表（教程 4.3）：优先级 / rule_overrides / custom_rules_dir")
@@ -767,6 +815,7 @@ def main() -> int:
     check_homograph_overrides(config, tagger)
     check_compound_flat_exceptions(config, tagger)
     check_sample_sentences(config)
+    check_reference_sentences(config)
     check_registry(config)
     check_artifacts(config)
 

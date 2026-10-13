@@ -5,7 +5,11 @@
     "米": {"reading": "コメ", "pron": "コメ", "accent_raw": "2"},
     "盛る": {"accent_raw": "0"},
     "日本": {"reading": "ニホン", "pron": "ニホン", "accent_raw": "2"},
-    "日本人": {"reading": "ニホンジン", "pron": "ニホンジン", "accent_raw": "4"}
+    "日本人": {"reading": "ニホンジン", "pron": "ニホンジン", "accent_raw": "4"},
+    "南東部": {"accent_raw": "3"},
+    "ひとつ": {"accent_raw": "2"},
+    "（笑）": {"reading": "ワライ", "pron": "ワライ", "accent_raw": "0"},
+    "観光地": {"a_con_type": "C1"}
   },
   "resegment": {"enabled": true},
   "nucleus_legality": {"avoid_devoiced": false},

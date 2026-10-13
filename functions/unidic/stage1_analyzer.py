@@ -285,13 +285,15 @@ def _build_morph(
         pron_override = override.get("pron")
         pron = str(pron_override) if pron_override else morph.pron
         accent_raw = str(override["accent_raw"]) if "accent_raw" in override else morph.accent_raw
+        pos = str(override["pos"]) if "pos" in override else morph.pos
+        a_con_type = str(override["a_con_type"]) if "a_con_type" in override else morph.a_con_type
         morph = Morph(
             idx=morph.idx, morph=morph.morph, lemma=morph.lemma, reading=reading,
             pron=pron, pron_raw=str(pron_override) if pron_override else morph.pron_raw,
-            pos=morph.pos, conj_type=morph.conj_type, conj_form=morph.conj_form,
+            pos=pos, conj_type=morph.conj_type, conj_form=morph.conj_form,
             accent_raw=accent_raw, mora_count=mora_util.mora_count(pron),
             is_unknown=False, accent_source=ACCENT_SOURCE_HOMOGRAPH,
-            goshu=morph.goshu, a_con_type=morph.a_con_type, a_mod_type=morph.a_mod_type,
+            goshu=morph.goshu, a_con_type=a_con_type, a_mod_type=morph.a_mod_type,
         )
     elif override is not None:
         logger.warning("homograph_overrides[%s] 应为对象，已忽略", surface)

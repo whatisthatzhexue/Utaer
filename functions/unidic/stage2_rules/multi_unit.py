@@ -43,15 +43,18 @@ def compute_units(morphs: MorphList) -> list[Unit]:
             not morph.new_unit               # 强制新単位标记优先（起伏式付属語第 2 単位等）
             and (
                 morph.is_particle_like      # 付属語紧跟前部（NHK Ⅲ-1 付属語不干渉）
-                or morph.is_symbol          # 标点等记号并入前单位
+                # 标点等无读音记号并入前单位；有读音的记号形（如（笑）→ワライ）独立成単位
+                or (morph.is_symbol and not morph.pron)
                 or prev.join_next           # 复合词/接辞合并标记
                 or prev.pos_head == "接頭辞"  # 接头辞与其后续词同单位
-                # サ変・补助动词（動詞-非自立可能）并入前部単位：
-                # 名詞＋し/する（勉強+し）或 て/で＋补助動詞（食べて+いる）；
-                # 主用言用法（買い物に+行き 等）不并入
+                # サ変（動詞-非自立可能）并入前部単位：
+                # 名詞＋し/する（勉強+し）或 て/で＋补助动词（〜て+いる → イッテイタ）；
+                # 主用言用法（買い物に+行き）不并入；
+                # 命令形补助动词（〜して＋ください 用例对照：サンコーニ━・シテ━・クダサ＼イ）独立成単位
                 or (
                     morph.pos_head == "動詞"
                     and "非自立" in morph.pos
+                    and morph.conj_form != "命令形"
                     and (
                         prev.pos_head == "名詞"
                         or (
@@ -75,6 +78,45 @@ def compute_units(morphs: MorphList) -> list[Unit]:
             start = i
     units.append(Unit(unit_id=len(units), start=start, end=len(morphs) - 1))
     return units
+
+
+#: 指示副詞＋いう 的定型複合単位（用例对照：そういう → ソーユー━）
+_SHIIU_FRONTS: frozenset[str] = frozenset({"そう", "こう", "どう", "ああ"})
+
+
+class UnitJoinRule(Rule):
+    """定型複合単位：指示副詞＋「いう」（そういう→ソーユー━ 等）。
+
+    前部（そう/こう/どう/ああ）与「いう」合并为单一アクセント単位并整体平板化
+    （NHK アクセント慣例；用例对照：そういう中 → ソーユー━・ナ＼カデ）。
+    """
+
+    rule_id = "R-UNIT-JOIN"
+    name = "定型複合単位（そういう 等）"
+    source_ref = "NHK アクセント慣例（そういう→ソーユー━；用例对照）"
+    priority = 220
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        if i + 1 >= len(morphs):
+            return False
+        front, rear = morphs[i], morphs[i + 1]
+        if front.claimed or rear.claimed or front.accent is not None or rear.accent is not None:
+            return False
+        return front.morph in _SHIIU_FRONTS and rear.morph == "いう"
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        front, rear = morphs[i], morphs[i + 1]
+        front.accent = 0
+        rear.accent = 0
+        front.join_next = True
+        rear.claimed = True
+        front.derived_by = rear.derived_by = self.rule_id
+        logic = (
+            f"「{front.morph}いう」为定型複合（NHK アクセント慣例 ソーユー━）→ "
+            "合并为单一アクセント単位并整体平板化"
+        )
+        morphs.add_report(self, (i, i + 1), logic, morphs.render_range(i, i + 1))
 
 
 class NumTwoUnitRule(Rule):

@@ -55,13 +55,38 @@ TITLE_WORDS: frozenset[str] = frozenset({
     "氏", "名人", "博士", "監督", "議員", "教授", "司令官", "大臣", "長官",
 })
 
+#: 和語数詞（词典 pos 标注不可靠时的兜底；数詞＋普通名詞不复合，用例对照：
+#: ひとつ中止 → ヒト＼ツ・チューシニ━）
+WAGO_NUMERALS: frozenset[str] = frozenset({
+    "ひとつ", "ふたつ", "みっつ", "よっつ", "いつつ", "むっつ",
+    "ななつ", "やっつ", "ここのつ", "とお", "いくつ",
+})
+
+
+def _is_numeral_front(morph: MorphState) -> bool:
+    """前部是否为数詞（pos 的 ``数詞`` 标注或和语数詞表）。"""
+    return "数詞" in morph.pos or morph.morph in WAGO_NUMERALS
+
+
+def _is_counter_rear(morph: MorphState) -> bool:
+    """後部是否为助数詞性要素（接尾辞・助数詞可能・数詞——数詞+助数詞的复合仍要走 C 规则）。"""
+    return (
+        morph.pos_head == "接尾辞"
+        or "助数詞" in morph.pos
+        or "数詞" in morph.pos
+    )
+
 #: 复合词的合法前部/后部品詞（资料二 表10 标题：普通名詞・接尾辞）
 FRONT_POS_HEADS: frozenset[str] = frozenset({"名詞"})
 REAR_POS_HEADS: frozenset[str] = frozenset({"名詞", "接尾辞"})
 
 
 def _eligible_pair(morphs: MorphList, i: int) -> bool:
-    """判断 [i, i+1] 是否为可结合的名词对（双方未推导、未占用）。"""
+    """判断 [i, i+1] 是否为可结合的名词对（双方未推导、未占用）。
+
+    数詞（含和语数词表）＋普通名词（非助数詞性）不复合——数词与被数词在韵律上
+    是独立的アクセント単位（用例对照：ひとつ中止 → ヒト＼ツ・チューシニ━）。
+    """
     if i < 0 or i + 1 >= len(morphs):
         return False
     front, rear = morphs[i], morphs[i + 1]
@@ -70,6 +95,8 @@ def _eligible_pair(morphs: MorphList, i: int) -> bool:
     if front.pos_head not in FRONT_POS_HEADS or rear.pos_head not in REAR_POS_HEADS:
         return False
     if front.mora_count <= 0 or rear.mora_count <= 0:
+        return False
+    if _is_numeral_front(front) and not _is_counter_rear(rear):
         return False
     return True
 
@@ -107,7 +134,9 @@ def _rear_connection_type(rear: MorphState, nhk_flat_first: bool = True) -> str 
         if main in (0, 1) or main == mora:   # 平板・頭高・尾高 → 後部一型
             return "C2"
         return "C1"                          # 中高 → 後部保存型
-    return "C1"                              # 5 拍以上 → 後部保存型
+    # 5 拍以上：後部保存型——后部自身调型完整保留，作为独立アクセント単位呈现
+    # （不合并单位；用例对照：中国｜南東部の → チュ＼ーゴク・ナント＼ーブノ）
+    return None
 
 
 class _CompoundBase(Rule):

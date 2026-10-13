@@ -103,10 +103,18 @@ _FRONT_POS_PREFIX: dict[str, str] = {
     "代名詞": "名詞%",   # 代名詞 使用 名詞% 规格
     "動詞": "動詞%",
     "形容詞": "形容詞%",  # i-形容词（NHK Ⅲ-3）
+    "形状詞": "名詞%",   # ナ形容词（大変+でし→タイヘンデ＼シ 等，用例对照）
+    "助動詞": "動詞%",   # 付属語链尾（〜ていた+けど→イッテイタ＼ケド 等，用例对照）
 }
 
-#: F 系列规则适用的前部品詞（NHK Ⅲ-1 名词/代名词 + Ⅲ-2 动词 + Ⅲ-3 形容词）
-F_RULE_FRONT_POS: frozenset[str] = frozenset({"名詞", "代名詞", "動詞", "形容詞"})
+#: F 系列规则适用的前部品詞（NHK Ⅲ-1/Ⅲ-2/Ⅲ-3 ＋ 形状詞・付属語链尾的用例对照）
+F_RULE_FRONT_POS: frozenset[str] = frozenset(
+    {"名詞", "代名詞", "動詞", "形容詞", "形状詞", "助動詞"}
+)
+
+#: F2@M（M≥1）不拆第 2 単位、与 M1 合并保持的付属語（です/でし：用例对照
+#: 港町です→ミナト＼マチデス、大変でした→タイヘンデ＼シタ）
+_MERGED_AUX: frozenset[str] = frozenset({"デス", "デシ"})
 
 #: 名词性前部（R-PART-NO-ODAKA 等 NHK Ⅲ-1 专属规则）
 NOMINAL_FRONT_POS: frozenset[str] = frozenset({"名詞", "代名詞"})
@@ -296,7 +304,11 @@ class PartKifukuRule(Rule):
                     f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
                     f"前部为 0 型：文節型 = N1 + M（{n1} + {m1_param}），付属語内に核"
                 )
-            elif m1_param >= 1:
+            elif (
+                m1_param >= 1
+                and front.pos_head != "助動詞"                       # 付属語链尾不拆単位
+                and mora_util.strip_brackets(morph.pron) not in _MERGED_AUX
+            ):
                 morph.accent = m1_param
                 morph.new_unit = True
                 logic = (
@@ -305,11 +317,11 @@ class PartKifukuRule(Rule):
                     "（NHK Ⅲ-1 1.2 b／Ⅲ-2 1.2a）"
                 )
             else:
-                # M=0：付属語无自身核 → 前部にそのまま連なる（NHK Ⅲ-2 1.1b 直接連続）
+                # M=0（直接連続）／です・でし（合并保持）／付属語链尾：前部核保持、付属語置平
                 morph.accent = 0
                 logic = (
                     f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
-                    "前部起伏且 M=0：付属語无自身下降核，前部にそのまま連なる（NHK Ⅲ-2 1.1b）"
+                    "前部核保持、付属語直接連続（M=0／です・でし／付属語链尾）"
                 )
         elif f_type == F3:
             if front.accent == 0:
@@ -386,7 +398,9 @@ class PartNoOdakaRule(Rule):
             mora_util.is_special_mora(moras[last_index])
             or mora_util.is_diphthong_glide(moras, last_index)          # 二重母音副音
         )
-        is_mid_high_special = (0 < prev.accent < prev.mora_count) and last_specialish
+        # 中高型（核が2拍目以降）のみが对象。頭高型（核=1拍目）は の 接续で保持
+        # （用例对照：今回→コ＼ンカイノ、廈門→ア＼モイノ、ミソ→ミ＼ソノ）
+        is_mid_high_special = (1 < prev.accent < prev.mora_count) and last_specialish
         if not (is_odaka or is_mid_high_special):
             return False
         if "数詞" in prev.pos:
