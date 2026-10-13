@@ -232,6 +232,68 @@ def assemble_service_tokens(
     return tokens
 
 
+def show_accent(data: dict[str, Any]) -> str:
+    """将 :func:`analyze_text` 的返回 JSON 转换为直观的 NHK 音调标注文本。
+
+    输出格式（确定性、可直接展示）::
+
+        【输入】米を盛る
+        【NHK】コメ＼オ・モル━
+          [単位0] 米を：コメ＼オ（L H L）
+          [単位1] 盛る：モル━（L H）
+
+    记号说明：``＼``=下降核位置（其后下降；位于词末即尾高）；``━``=平板型；
+    ``・``=アクセント単位分界。由 tokens 的 ``accent``/``moras``/``pitch``/``unit``
+    重建，与引擎内部 NHK 记号渲染（rule_report 的 result）同源与同规则；
+    标点等无读音形態素并入其所属単位（不占音拍、不参与记号）。
+
+    :raises ValueError: ``data`` 非 :func:`analyze_text` 的返回结构（缺 text/tokens 或 tokens 为空）。
+    """
+    tokens = data.get("tokens") if isinstance(data, dict) else None
+    if not isinstance(tokens, list) or not tokens:
+        raise ValueError("show_accent 需要 analyze_text 的返回 JSON（dict，含非空 tokens）")
+
+    # 按 unit 值分组（tokens 有序且 unit 单调不减，此处按「连续相同」分组）
+    units: list[list[dict[str, Any]]] = []
+    for token in tokens:
+        if not units or token.get("unit") != units[-1][0].get("unit"):
+            units.append([token])
+        else:
+            units[-1].append(token)
+
+    notations: list[str] = []
+    details: list[str] = []
+    for group in units:
+        unit_id = group[0].get("unit", 0)
+        surface = "".join(str(t.get("morph", "")) for t in group)
+        moras = [m for t in group for m in (t.get("moras") or [])]
+        h_l = [p for t in group for p in (t.get("pitch") or [])]
+
+        fall = 0
+        offset = 0
+        for token in group:
+            count = len(token.get("moras") or [])
+            accent = int(token.get("accent", 0) or 0)
+            if fall == 0 and accent > 0:
+                fall = offset + accent
+            offset += count
+
+        if not moras:
+            notation = surface              # 标点等无读音单位：直接以表記呈现
+        else:
+            notation = mora_util.render_accent("".join(moras), fall)
+        notations.append(notation)
+
+        hl_text = f"（{' '.join(h_l)}）" if h_l else ""
+        details.append(f"  [単位{unit_id}] {surface}：{notation}{hl_text}")
+
+    return "\n".join([
+        f"【输入】{data.get('text', '')}",
+        f"【NHK】{'・'.join(notations)}",
+        *details,
+    ])
+
+
 def assemble_accent_json(ctx: MorphList) -> dict[str, Any]:
     """组装 ``audio_accent.json``（总 AGENTS.md §7.4 简化格式）。
 

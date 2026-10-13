@@ -93,6 +93,35 @@ def check_service_api(config: dict) -> None:
     check("确定性：两次调用全等", pipeline.analyze_text("米を盛る") == r)
 
 
+# --------------------------------------- 0.5 show_accent（JSON → NHK 标注文本）
+def check_show_accent(config: dict) -> None:
+    _section("show_accent：analyze_text JSON → 直观 NHK 音调标注文本")
+
+    result = pipeline.analyze_text("米を盛る")
+    expected = (
+        "【输入】米を盛る\n"
+        "【NHK】コメ＼オ・モル━\n"
+        "  [単位0] 米を：コメ＼オ（L H L）\n"
+        "  [単位1] 盛る：モル━（L H）"
+    )
+    check("米を盛る：逐字输出", pipeline.show_accent(result) == expected,
+          pipeline.show_accent(result))
+    check("私は学生です。：记号行（尾高+助詞/平板+です）",
+          "【NHK】ワタクシワ━・ガクセイデ＼ス"
+          in pipeline.show_accent(pipeline.analyze_text("私は学生です。")))
+    check("東京駅：明細（L H H L L L）",
+          "[単位0] 東京駅：トーキョ＼ーエキ（L H H L L L）"
+          in pipeline.show_accent(pipeline.analyze_text("東京駅")))
+    check("多行：三単位记号全句连续",
+          "【NHK】コメ＼オ・モル━・トーキョ＼ーエキ"
+          in pipeline.show_accent(pipeline.analyze_text("米を盛る\n東京駅")))
+    try:
+        pipeline.show_accent({})
+        check("非法输入 → ValueError", False)
+    except ValueError:
+        check("非法输入 → ValueError", True)
+
+
 # ---------------------------------------------------------------- 1. mora_util
 def check_mora_util() -> None:
     _section("mora_util 纯函数（括号解码/拍数/判定/渲染）")
@@ -722,6 +751,7 @@ def main() -> int:
     config = env_util.load_rules_config()
 
     check_service_api(config)
+    check_show_accent(config)
     check_mora_util()
     check_ruby_util()
     check_sample1(config)
