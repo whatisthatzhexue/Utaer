@@ -354,6 +354,12 @@ def check_fallback(config: dict) -> None:
     check("形容詞5拍 → 中高[-2] accent=4",
           ctx[0].accent == 4 and ctx.report[0]["rule_id"] == "R-FALLBACK-GOSHU-ADJ")
 
+    # 形容词名词化「〜さ」兜底（用户确认：多为0调）
+    ctx = MorphList([fake_unknown("ほげさ", "ホゲサ", 3)])
+    run_engine(ctx, load_registry(config))
+    check("未收录〜さ名词化 → 平板0（R-FALLBACK-SASA）",
+          ctx[0].accent == 0 and ctx.report[0]["rule_id"] == "R-FALLBACK-SASA")
+
 
 # --------------------------------------------- 6.5 名词付属語全套（表12 F 系列）
 def check_particles_m4(config: dict) -> None:
@@ -690,7 +696,7 @@ def check_compound_flat_exceptions(config: dict, tagger) -> None:
 _EXPECTED_SENT1 = (
     "ア＼モイ・ア＼モイワ・チュ＼ーゴク・ナント＼ーブノ・ウツクシ＼ー・ミナト＼マチデス・"
     "コ＼ンカイワ・ア＼モイノ・ゼッタイニ━・ハズセナイ━・オススメカンコ＼ーチ・"
-    "イチ＼ゼロセンオ・ゴショーカイシマ＼ス・アモイリョ＼コーノ・ケーカクオ━・タテ＼ル・"
+    "ジュ＼ッセンオ・ゴショーカイシマ＼ス・アモイリョ＼コーノ・ケーカクオ━・タテ＼ル・"
     "サ＼イワ・ゼ＼ヒ・サンコーニ━・シテ━・クダサ＼イ"
 )
 _EXPECTED_SENT2 = (
@@ -722,9 +728,8 @@ def check_reference_sentences(config: dict) -> None:
     diff1 = [k for k in range(max(len(exp1_units), len(got1_units)))
              if (exp1_units[k] if k < len(exp1_units) else None)
              != (got1_units[k] if k < len(got1_units) else None)]
-    # 语料中「10選」按阿拉伯数字逐位读（イチ＼ゼロセンオ；数字読み子系统边界）；
-    # 用户参照读法 ジュ＼ッセンオ 为待建子系统目标——除该处外全单位逐字一致
-    check("句1：全単位逐字一致（10選 数字读法为语料内已登记偏差）",
+    # 数词读法子系统（R-NUM-READING）落地后，10選→ジュ＼ッセンオ 与参照一致
+    check("句1：21/21 単位逐字一致（含 10選→ジュ＼ッセンオ 数词读法）",
           len(diff1) == 0,
           f"diff={diff1}")
 
@@ -734,18 +739,49 @@ def check_reference_sentences(config: dict) -> None:
           got2 == _EXPECTED_SENT2, got2)
 
 
+# ------------------------------- 6.9 数词读法（NHK Ⅱ：数字链＋促音规则）
+def check_numeral(config: dict) -> None:
+    _section("数词读法（numeral_util ＋ R-NUM-READING）")
+
+    import numeral_util
+
+    for value, kana, accent in [
+        (10, "ジュー", 1), (11, "ジューイチ", 1), (15, "ジューゴ", 1),
+        (21, "ニジューイチ", 0), (100, "ヒャク", 0), (300, "サンビャク", 0),
+        (600, "ロッピャク", 0), (800, "ハッピャク", 0), (3000, "サンゼン", 0),
+        (8000, "ハッセン", 0), (10000, "イチマン", 0),
+    ]:
+        check(f"读法合成 {value} → {kana}（アクセント {accent}）",
+              numeral_util.compose_number_kana(value) == (kana, accent),
+              str(numeral_util.compose_number_kana(value)))
+
+    for kana, surf, read, expected in [
+        ("ジュー", "選", "セン", "ジュッ"), ("ジューイチ", "階", "カイ", "ジューイッ"),
+        ("ロク", "階", "カイ", "ロッ"), ("ハチ", "階", "カイ", "ハッ"),
+        ("ジュー", "月", "ガツ", "ジュー"), ("ジュー", "時", "ジ", "ジュー"),
+    ]:
+        check(f"促音规则 {kana}＋{surf} → {expected}",
+              numeral_util.apply_sokuon(kana, surf, read) == expected,
+              numeral_util.apply_sokuon(kana, surf, read))
+
+    out = pipeline.show_accent(pipeline.analyze_text("10選をご紹介します。"))
+    got = [ln for ln in out.splitlines() if ln.startswith("【NHK】")][0][len("【NHK】"):]
+    check("句级 10選をご紹介します。→ ジュ＼ッセンオ・ゴショーカイシマ＼ス",
+          got == "ジュ＼ッセンオ・ゴショーカイシマ＼ス", got)
+
+
 # ------------------------------- 6.95 拓展例句回归（〜ています/でしょう/ください 防护）
 def check_extended_sentences(config: dict) -> None:
     _section("拓展例句回归（修正项防护：动词链清零/多核渲染/终助词/でしょう）")
 
     cases = [
-        ("東京都に住んでいます。", "トーキョ＼ートニ・スンデイマ＼ス"),          # F4 链式清零
+        ("飲んでいます。", "ノ＼ンデイマ＼ス"),          # 用户数据：动词核保留+ます核（双下降）
+        ("東京都に住んでいます。", "トーキョ＼ートニ・ス＼ンデイマ＼ス"),
         ("コーヒーを飲みながら本を読んでいます。",
-         "コーヒ＼ーオ・ノミナ＼ガラ・ホ＼ンオ・ヨンデイマ＼ス"),               # ながら + 链清零
+         "コーヒ＼ーオ・ノミナ＼ガラ・ホ＼ンオ・ヨ＼ンデイマ＼ス"),
         ("明日はきっと晴れるでしょう。", "アス＼ワ・キット━・ハレ＼ルデショ＼ー"),  # 修正表+多核渲染
         ("電気を消してください。", "デ＼ンキオ・ケシテ━・クダサ＼イ"),            # 命令形补助动词独立
         ("来ました。", "キマ＼シタ"),                                            # 非自立零化边界（来-保留）
-        ("飲んでいます。", "ノンデイマ＼ス"),                                    # F4 链清零（五段词干）
         ("大きくなったり。", "オーキ＼ク・ナ＼ッタリ"),                          # 起伏形容词+なる 2単位（NHK Ⅲ-3）
     ]
     for text, expected in cases:
@@ -835,6 +871,7 @@ def main() -> int:
     check_homograph_overrides(config, tagger)
     check_compound_flat_exceptions(config, tagger)
     check_sample_sentences(config)
+    check_numeral(config)
     check_extended_sentences(config)
     check_reference_sentences(config)
     check_registry(config)

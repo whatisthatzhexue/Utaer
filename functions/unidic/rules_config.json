@@ -9,10 +9,13 @@
     "南東部": {"accent_raw": "3"},
     "ひとつ": {"accent_raw": "2"},
     "きっと": {"accent_raw": "0"},
+    "なる": {"accent_raw": "1"},
+    "なっ": {"accent_raw": "1"},
     "（笑）": {"reading": "ワライ", "pron": "ワライ", "accent_raw": "0"},
     "観光地": {"a_con_type": "C1"}
   },
   "resegment": {"enabled": true},
   "nucleus_legality": {"avoid_devoiced": false},
-  "compound": {"nhk_flat_exceptions_priority": true}
+  "compound": {"nhk_flat_exceptions_priority": true},
+  "numeral": {"enabled": true}
 }

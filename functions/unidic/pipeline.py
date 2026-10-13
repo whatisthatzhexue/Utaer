@@ -25,6 +25,7 @@ from typing import Any
 
 import env_util
 import mora_util
+import numeral
 import resegment
 import ruby_util
 import stage1_analyzer
@@ -94,6 +95,9 @@ def _run_context(
         # 预处理：真未收录整词的确定性词典再切分（rules_config.json 的 resegment.enabled 开关）
         if bool((config.get("resegment") or {}).get("enabled", True)):
             resegment.resegment_unknowns(ctx, tagger, config.get("homograph_overrides", {}))
+        # 预处理：阿拉伯数字链＋助数詞 → NHK Ⅱ 合成读法（numeral.enabled 开关）
+        if bool((config.get("numeral") or {}).get("enabled", True)):
+            numeral.merge_numerals(ctx)
         rules = load_registry(config)
         run_engine(ctx, rules)
     return ctx, stage1_result, config

@@ -335,6 +335,39 @@ class GoshuAdjRule(Rule):
         morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
 
 
+class GoshuSasaRule(Rule):
+    """語種倾向补条：形容词名词化「〜さ」形式 → 默认平板 0（用户确认：多为0调）。
+
+    词典已收录的 〜さ 词（如 暑さ）仍取词典值；本规则仅兜底未收录词。
+    """
+
+    rule_id = "R-FALLBACK-SASA"
+    name = "語種倾向兜底・形容词名词化（〜さ）・平板型"
+    source_ref = "NHK 語種倾向补条（用户确认：あつさ 类名词化多为0调）"
+    priority = 65                        # 先于其他語種倾向/外来語兜底条目
+    phase = RulePhase.DERIVATION
+
+    def match(self, morphs: MorphList, i: int) -> bool:
+        morph = morphs[i]
+        if morph.accent is not None or morph.claimed or not morph.is_unknown:
+            return False
+        if morph.pos_head not in ("名詞", "形状詞"):
+            return False
+        return morph.morph.endswith("さ")
+
+    def apply(self, morphs: MorphList, i: int) -> None:
+        morph = morphs[i]
+        morph.accent = 0
+        morph.derived_by = self.rule_id
+        if "词典未收录" not in morph.notes:
+            morph.notes.append("词典未收录")
+        logic = (
+            f"「{morph.morph}」词典未收录且为形容词名词化（〜さ）形式 → "
+            "按 NHK 語種倾向补条（多为0调）取 平板型（0）"
+        )
+        morphs.add_report(self, (i, i), logic, morphs.render_range(i, i))
+
+
 class FallbackHeibanRule(Rule):
     """兜底：无任何调型来源时取默认平板型 0（NHK 語種倾向表的终档）。"""
 
