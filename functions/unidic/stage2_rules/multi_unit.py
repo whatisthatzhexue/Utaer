@@ -46,7 +46,9 @@ def compute_units(morphs: MorphList) -> list[Unit]:
                 # 标点等无读音记号并入前单位；有读音的记号形（如（笑）→ワライ）独立成単位
                 or (morph.is_symbol and not morph.pron)
                 or prev.join_next           # 复合词/接辞合并标记
-                or prev.pos_head == "接頭辞"  # 接头辞与其后续词同单位
+                # 接头辞与其后续词同单位——但自带调型的接头辞独立成単位
+                # （用例对照：第3期が → ダ＼イ・サ＼ンキガ；お米 的 お 无调型仍并入）
+                or (prev.pos_head == "接頭辞" and not prev.accent_raw)
                 # サ変（動詞-非自立可能）并入前部単位：
                 # 名詞＋し/する（勉強+し）或 て/で＋补助动词（〜て+いる → イッテイタ）；
                 # 主用言用法（買い物に+行き）不并入；

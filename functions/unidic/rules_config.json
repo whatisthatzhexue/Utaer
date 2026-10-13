@@ -13,11 +13,17 @@
     "なっ": {"accent_raw": "1"},
     "私": {"reading": "ワタシ", "pron": "ワタシ", "accent_raw": "0"},
     "あの": {"accent_raw": "0"},
+    "少女": {"reading": "ショージョ", "pron": "ショージョ", "accent_raw": "1"},
+    "10月": {"reading": "ジューガツ", "pron": "ジューガツ", "accent_raw": "0"},
+    "第": {"accent_raw": "1"},
+    "描か": {"accent_raw": "3"},
     "（笑）": {"reading": "ワライ", "pron": "ワライ", "accent_raw": "0"},
     "観光地": {"a_con_type": "C1"}
   },
   "resegment": {"enabled": true},
   "nucleus_legality": {"avoid_devoiced": false},
   "compound": {"nhk_flat_exceptions_priority": true},
-  "numeral": {"enabled": true}
+  "numeral": {"enabled": true},
+  "compound_verb": {"enabled": true},
+  "no_compound": {"enabled": true}
 }

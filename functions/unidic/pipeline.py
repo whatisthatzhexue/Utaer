@@ -26,6 +26,7 @@ from typing import Any
 import compound_verb
 import env_util
 import mora_util
+import no_compound
 import numeral
 import resegment
 import ruby_util
@@ -102,6 +103,11 @@ def _run_context(
         # 预处理：多调型複合動詞 → 首位動詞规则裁定（compound_verb.enabled 开关）
         if bool((config.get("compound_verb") or {}).get("enabled", True)):
             compound_verb.apply_compound_verb_rule(
+                ctx, tagger, config.get("homograph_overrides", {})
+            )
+        # 预处理：の-复合名词结合律（no_compound.enabled 开关）
+        if bool((config.get("no_compound") or {}).get("enabled", True)):
+            no_compound.apply_no_compound_rule(
                 ctx, tagger, config.get("homograph_overrides", {})
             )
         rules = load_registry(config)

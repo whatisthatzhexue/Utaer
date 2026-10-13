@@ -304,7 +304,10 @@ class PartKifukuRule(Rule):
         m2_param = params[1] if len(params) > 1 else m1_param
 
         if f_type == F2:
-            if front.accent == 0:
+            # 助動詞链尾且 M≥1（如 〜れ+た 的 た）：合并保持不插入
+            # （用例对照：エガカ＼レタ）；M=0 型（けど等下がり目插入型）不受此限
+            # （用例对照：イッテイタ＼ケド）
+            if front.accent == 0 and not (front.pos_head == "助動詞" and m1_param >= 1):
                 _place_total(front, morph, n1 + m1_param)
                 logic = (
                     f"「{morph.morph}」结合型 {f_type}@{m1_param}（资料二 表12）→ "
@@ -335,6 +338,13 @@ class PartKifukuRule(Rule):
                 logic = (
                     f"「{morph.morph}」结合型 F3@{m1_param}（资料二 表12）→ "
                     "前部为 0 型：文節型 = M1（=0，整体保持）"
+                )
+            elif front.accent == n1 and n1 > 0:
+                # 前部为尾高型：核在接合部、付属語不干渉（如 描か＼+れ 保持 → エガカ＼レタ）
+                morph.accent = 0
+                logic = (
+                    f"「{morph.morph}」结合型 F3@{m1_param}（资料二 表12）→ "
+                    "前部为尾高型：核保持在接合部，付属語置平（不干渉）"
                 )
             else:
                 _place_total(front, morph, n1 + m1_param)

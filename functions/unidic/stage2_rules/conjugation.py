@@ -107,16 +107,31 @@ class ConjModRule(Rule):
                         f"N0 − M（{n0} − {modifier} = {morph.accent}）；前部核消失（付属語決定型）"
                     )
             else:  # M4（一段活用の未然形）
-                flattened = self._flatten_front(front)
-                if base == 0:
+                front_is_odaka = (
+                    front is not None
+                    and front.accent is not None
+                    and front.mora_count > 0
+                    and front.accent == front.mora_count
+                )
+                if front_is_odaka:
+                    # 前部为尾高型：核保持在接合部、不置平（如 描か＼＋れ → エガカ＼レタ）
+                    flattened = False
                     morph.accent = 0
-                    logic = f"表9 M4@{modifier}（一段活用の未然形）→ 基本形 0 型 → 保持平板（M0 = 0）"
-                else:
-                    morph.accent = max(0, base - modifier)
                     logic = (
-                        f"表9 M4@{modifier}（一段活用の未然形）→ 基本形非 0 型 → "
-                        f"M0 − M（{base} − {modifier} = {morph.accent}）；前部核消失"
+                        f"表9 M4@{modifier}（一段活用の未然形）→ 前部为尾高型："
+                        "核保持在接合部，付属語置平（不干渉）"
                     )
+                else:
+                    flattened = self._flatten_front(front)
+                    if base == 0:
+                        morph.accent = 0
+                        logic = f"表9 M4@{modifier}（一段活用の未然形）→ 基本形 0 型 → 保持平板（M0 = 0）"
+                    else:
+                        morph.accent = max(0, base - modifier)
+                        logic = (
+                            f"表9 M4@{modifier}（一段活用の未然形）→ 基本形非 0 型 → "
+                            f"M0 − M（{base} − {modifier} = {morph.accent}）；前部核消失"
+                        )
         else:
             # 命令形（NHK Ⅲ-2 活用形一覧表：タベ＼ロ、ノ＼メ、コ＼イ、シロ━）
             base = self._base_accent(front, morph)

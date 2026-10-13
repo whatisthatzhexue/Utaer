@@ -64,8 +64,16 @@ WAGO_NUMERALS: frozenset[str] = frozenset({
 
 
 def _is_numeral_front(morph: MorphState) -> bool:
-    """前部是否为数詞（pos 的 ``数詞`` 标注或和语数詞表）。"""
-    return "数詞" in morph.pos or morph.morph in WAGO_NUMERALS
+    """前部是否为数詞（pos 的 ``数詞`` 标注、和语数詞表、或含阿拉伯数字的表記）。
+
+    含阿拉伯数字的词（如 10月・2日）与后续普通名词在韵律上是独立単位
+    （用例对照：10月｜2日 → ジューガツ━・フツカ━）。
+    """
+    return (
+        "数詞" in morph.pos
+        or morph.morph in WAGO_NUMERALS
+        or any(ch.isascii() and ch.isdigit() for ch in morph.morph)
+    )
 
 
 def _is_counter_rear(morph: MorphState) -> bool:

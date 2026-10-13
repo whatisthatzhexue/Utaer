@@ -46,6 +46,8 @@ DEFAULT_RULES_CONFIG: dict = {
     "numeral": {"enabled": True},
     # 複合動詞首位規則预处理（多调型動詞 token → 首位動詞裁定）
     "compound_verb": {"enabled": True},
+    # の-复合名词结合律预处理（双平板组合 → 单一平板单位）
+    "no_compound": {"enabled": True},
     # 复合词：NHK Ⅰ複合名詞①平板例外表（〜語/化/間/顔/級/金/性/製/的）优先于词典 C 值
     "compound": {"nhk_flat_exceptions_priority": True},
 }
@@ -146,7 +148,7 @@ def load_rules_config(path: Path | None = None) -> dict:
         return config
     for key, value in data.items():
         if (
-            key in ("resegment", "nucleus_legality", "compound", "numeral", "compound_verb")
+            key in ("resegment", "nucleus_legality", "compound", "numeral", "compound_verb", "no_compound")
             and isinstance(value, dict)
             and isinstance(config.get(key), dict)
         ):
